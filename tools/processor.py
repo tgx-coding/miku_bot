@@ -1,4 +1,5 @@
 import re
+import logging
 import config
 import httpx
 from tools.network import get_message_content, get_forward_msg
@@ -21,7 +22,7 @@ async def get_image_hash(img_url: str) -> str:
                 content_md5 = hashlib.md5(resp.content).hexdigest()
                 return content_md5
         except Exception as e:
-            print(f"❌ 下载图片并计算 Hash 失败: {e}")
+            logging.error(f"❌ 下载图片并计算 Hash 失败: {e}")
     return None
 
 async def explain_image(img_url: str, is_emoji: bool = False):
@@ -46,7 +47,7 @@ async def explain_image(img_url: str, is_emoji: bool = False):
         return f"[{label}内容: {content}]"
 
     # 缓存未命中
-    print(f"🔍 发现新{'表情包' if is_emoji else '图片'}，请求 AI 解析...")
+    logging.info(f"🔍 发现新{'表情包' if is_emoji else '图片'}，请求 AI 解析...")
     
     try:
         # 这里动态传递 is_emoji 参数给 Prompt 管理类
@@ -66,7 +67,7 @@ async def explain_image(img_url: str, is_emoji: bool = False):
             return "[看不清细节喵]"
             
     except Exception as e:
-        print(f"❌ 识图 API 报错: {e}")
+        logging.error(f"❌ 识图 API 报错: {e}")
         return "[解析出错喵]"
     
 
@@ -87,7 +88,7 @@ async def explain_reply(reply_id: str):
         if referenced_text:
             return f"(引用消息: \"{referenced_text}\")\n"
     except Exception as e:
-        print(f"⚠️ 获取引用内容异常: {e}")
+        logging.warning(f"⚠️ 获取引用内容异常: {e}")
     return ""
 
 async def explain_forward(forward_id: str, limit: int = 20):
@@ -136,7 +137,7 @@ async def explain_forward(forward_id: str, limit: int = 20):
 
 
             if not str(content).strip():
-                print(f"\n👻 抓到空消息了！请查看这个 Node 到底长啥样:\n{node}\n")
+                logging.info(f"\n👻 抓到空消息了！请查看这个 Node 到底长啥样:\n{node}\n")
 
             parsed_msgs.append(f"{nickname}: {content}")
             
@@ -145,7 +146,7 @@ async def explain_forward(forward_id: str, limit: int = 20):
             return header + "\n".join(parsed_msgs) + "\n"
             
     except Exception as e:
-        print(f"⚠️ 解析合并转发异常: {e}")
+        logging.warning(f"⚠️ 解析合并转发异常: {e}")
     return ""
 
 
@@ -165,7 +166,7 @@ def get_explain_targets(msg: str) -> list:
     for match in re.finditer(r'\[CQ:image,([^\]]+)\]', msg):
         full_cq = match.group(0)
         content = match.group(1)
-        # print(f"DEBUG: 收到图片/表情包 CQ 码 -> {full_cq}") # 看看有没有 subType=1
+        # logging.info(f"DEBUG: 收到图片/表情包 CQ 码 -> {full_cq}") # 看看有没有 subType=1
         # 提取 URL (从 content 中找 url=xxx)
         url_match = re.search(r'url=([^,\]]+)', content)
         if url_match:
@@ -226,7 +227,7 @@ async def explain_message(raw_msg: str, msg_id, max_depth: int = 5) -> str:
         depth += 1
         
     if depth >= max_depth:
-        print(f"⚠️ 达到最大嵌套解析深度({max_depth}层)")
+        logging.warning(f"⚠️ 达到最大嵌套解析深度({max_depth}层)")
 
     return f"消息ID:{msg_id} 消息内容: {current_msg}".strip()
 

@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import config
 import numpy as np
 import time
@@ -31,10 +32,10 @@ class DataManager:
             return
 
         # 2. 如果主路径失败，尝试从备份加载
-        print(f"⚠️ 主存档损坏或不存在，尝试读取备份: {self.bak_path}")
+        logging.warning(f"⚠️ 主存档损坏或不存在，尝试读取备份: {self.bak_path}")
         if os.path.exists(self.bak_path):
             if self._attempt_load(self.bak_path):
-                print("♻️ 成功从备份文件恢复数据！")
+                logging.info("♻️ 成功从备份文件恢复数据！")
                 # 立即尝试修复主文件
                 self.save_data()
                 return
@@ -42,10 +43,10 @@ class DataManager:
         # 3. 万不得已，初始化
         self.data = self.start_data.copy()
         if not os.path.exists(self.data_path):
-            print("🆕 未找到存档，已初始化新存档")
+            logging.info("🆕 未找到存档，已初始化新存档")
             self.save_data()
         else:
-            print("🚨 警告：所有存档均损坏！数据已重置。")
+            logging.warning("🚨 警告：所有存档均损坏！数据已重置。")
 
     def _attempt_load(self, path):
         """内部读取逻辑，增加损坏现场保存"""
@@ -67,7 +68,7 @@ class DataManager:
             corrupt_path = f"{path}_corrupted_{timestamp}.json"
             try:
                 os.rename(path, corrupt_path)
-                print(f"📁 已将损坏文件移至: {corrupt_path}")
+                logging.info(f"📁 已将损坏文件移至: {corrupt_path}")
             except:
                 pass
             return False
@@ -86,9 +87,9 @@ class DataManager:
             # 3. 异步备份：将当前成功的存档存为 .bak
             shutil.copy2(self.data_path, self.bak_path)
             
-            # print("💾 存档已安全更新并备份")
+            # logging.info("💾 存档已安全更新并备份")
         except Exception as e:
-            print(f"❌ 写入极端失败: {e}")
+            logging.error(f"❌ 写入极端失败: {e}")
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
@@ -111,7 +112,7 @@ class DataManager:
         
         # 4. 自动存档并打印
         self.save_data() 
-        #print(f'❤ 用户 {user_id} 好感度变动: {change}, 当前总计: {total_score}')
+        #logging.info(f'❤ 用户 {user_id} 好感度变动: {change}, 当前总计: {total_score}')
         
         return total_score
     
@@ -220,7 +221,7 @@ class DataManager:
             # 打印一下调试信息
             all_t = self.data[key]["all_tokens"]
             times = self.data[key]["times"]
-            print(f"📊 [{model_type.upper()}] 更新: 本次 {total_tokens}, 总计 {all_t}, 平均 {all_t/times:.2f}")
+            logging.info(f"📊 [{model_type.upper()}] 更新: 本次 {total_tokens}, 总计 {all_t}, 平均 {all_t/times:.2f}")
             
             # 3. 自动保存
             self.save_data()
@@ -260,18 +261,18 @@ class DataManager:
                     try:
                         os.remove(str(file_path))
                     except Exception as e:
-                        print(f"❌ 物理文件删除失败 ({file_path}): {e}")
+                        logging.error(f"❌ 物理文件删除失败 ({file_path}): {e}")
                 
                 # 从内存中剔除
                 del self.data["image_cache"][img_id]
                 removed_count += 1
-                # print(f"🗑️ 已清理条目 {img_id}，原因: {reason}")
+                # logging.info(f"🗑️ 已清理条目 {img_id}，原因: {reason}")
 
         if removed_count > 0:
             self.save_data()
-            print(f"🧹 大扫除完成！")
-            print(f"   - 共清理条目: {removed_count} 个")
-            print(f"   - 其中旧格式数据: {malformed_count} 个")
+            logging.info(f"🧹 大扫除完成！")
+            logging.info(f"   - 共清理条目: {removed_count} 个")
+            logging.info(f"   - 其中旧格式数据: {malformed_count} 个")
     
     def get_involved_users_info(self, segment):
         """从对话片段中提取提到的QQ及其对应的旧信息"""
@@ -310,7 +311,7 @@ class DataManager:
             # --- 核心修复：增加类型校验 ---
             # 如果 level 是元组、列表或 None，强行转为默认字典，防止 .get() 崩溃
             if not isinstance(level, dict):
-                print(f"⚠️ 警告: QQ {qq} 的数据格式错误(类型:{type(level)})，已自动重置显示。")
+                logging.warning(f"⚠️ 警告: QQ {qq} 的数据格式错误(类型:{type(level)})，已自动重置显示。")
                 level = {'name': '未知', 'favor': 0, 'mood': '稳定'}
             # ----------------------------
 

@@ -1,5 +1,6 @@
 import httpx
 import json
+import logging
 import config
 import Global
 import re
@@ -25,7 +26,7 @@ async def ask_deepseek_smart(messages, api_key):
     global chat_contexts
 
     
-    # print(
+    # logging.info(
     #     "输入提示词：",
     #     messages,"/n",
     # )
@@ -70,7 +71,7 @@ async def ask_deepseek_smart(messages, api_key):
             return reply_text_list, score_change, reply_dic_list
 
     except Exception as e:
-        print(f"❌ 出错: {e}")
+        logging.error(f"❌ 出错: {e}")
         return "喵？", 0, {"role": "assistant", "content": e}
 
 #最抽象的ai输出函数
@@ -96,9 +97,9 @@ async def ask_deepseek(prompt, max_tokens=1024, temperature=0.5, response_format
                 headers={"Authorization": f"Bearer {config.DEEP_SEEK_API_KEY}"},
                 timeout=timeout
             )
-            # print("--- 发送给 DS 的完整数据 ---")
-            # print(json.dumps(json_dic, indent=2, ensure_ascii=False))
-            # print("---------------------------")
+            # logging.info("--- 发送给 DS 的完整数据 ---")
+            # logging.info(json.dumps(json_dic, indent=2, ensure_ascii=False))
+            # logging.info("---------------------------")
             # 检查状态码 
             response.raise_for_status() 
             
@@ -106,10 +107,10 @@ async def ask_deepseek(prompt, max_tokens=1024, temperature=0.5, response_format
             return response.json()
 
     except httpx.TimeoutException:
-        print("❌ DeepSeek 请求超时了")
+        logging.error("❌ DeepSeek 请求超时了")
         return None
     except Exception as e:
-        print(f"❌ 调用 DeepSeek 出错: {e}")
+        logging.error(f"❌ 调用 DeepSeek 出错: {e}")
         return None
     
 
@@ -140,7 +141,7 @@ async def ask_deepseek(prompt, max_tokens=1024, temperature=0.5, response_format
 #             res_data = response.json()
             
 #             if "choices" not in res_data:
-#                 print(f"⚠️ 接口返回异常: {res_data}")
+#                 logging.info(f"⚠️ 接口返回异常: {res_data}")
 #                 # --- 修改：异常返回也要多加一个 0 (Token) ---
 #                 return ["Miku 走神了喵..."], 0, [], 0
 
@@ -153,7 +154,7 @@ async def ask_deepseek(prompt, max_tokens=1024, temperature=0.5, response_format
 #                 score_change = res_json.get("score", 0)
 #                 new_feeling = res_json.get("feeling", "无")
 #             except Exception as parse_e:
-#                 print(f"⚠️ JSON 解析失败: {parse_e}")
+#                 logging.info(f"⚠️ JSON 解析失败: {parse_e}")
 #                 reply_text = raw_content.strip()
 #                 score_change = 0
 
@@ -168,7 +169,7 @@ async def ask_deepseek(prompt, max_tokens=1024, temperature=0.5, response_format
 #             usage = res_data.get("usage", {})
 #             total_tokens = usage.get('total_tokens', 0) # 提取 total_tokens
             
-#             print(f"📊输出模型消耗: {total_tokens} tokens")
+#             logging.info(f"📊输出模型消耗: {total_tokens} tokens")
 #             DM.update_tokens(total_tokens, model_type="output")
 #             DM.data["felling"] = new_feeling
 #             DM.save_data()
@@ -176,11 +177,11 @@ async def ask_deepseek(prompt, max_tokens=1024, temperature=0.5, response_format
 #             return reply_text_list, score_change, reply_dic_list, total_tokens
 
 #     except Exception as e:
-#         print(f"❌ ask_AI 请求失败: {e}")
+#         logging.info(f"❌ ask_AI 请求失败: {e}")
 #         return ["Miku 脑袋乱乱的喵..."], 0, [], 0
 
 #     except Exception as e:
-#         print(f"❌ 运行出错: {e}")
+#         logging.info(f"❌ 运行出错: {e}")
 #         # 保持返回格式一致，防止主程序报错
 #         err_msg = "大脑乱掉了喵..."
 #         return [err_msg], 0, [{"role": "assistant", "content": str(e)}],0
@@ -211,7 +212,7 @@ async def ask_AI(messages, api_key, model_name=None):
             
             res_data = response.json()
             if "choices" not in res_data:
-                print(f"⚠️ 接口返回异常: {res_data}")
+                logging.warning(f"⚠️ 接口返回异常: {res_data}")
                 return ["Miku 走神了喵..."], 0, [], 0, "无"
 
             raw_content = res_data['choices'][0]['message']['content'].strip()
@@ -229,7 +230,7 @@ async def ask_AI(messages, api_key, model_name=None):
                 # 【关键修复】：判断 AI 返回的是不是列表
                 if isinstance(res_json, list):
                     # 如果是列表，通常取第一个元素，或者把所有 reply 拼起来
-                    print("💡 检测到 AI 返回了列表格式 JSON，已自动提取首项")
+                    logging.info("💡 检测到 AI 返回了列表格式 JSON，已自动提取首项")
                     res_json = res_json[0] if len(res_json) > 0 else {}
 
                 reply_text = res_json.get("reply", "").strip()
@@ -237,8 +238,8 @@ async def ask_AI(messages, api_key, model_name=None):
                 new_feeling = res_json.get("feeling", "无")
 
             except Exception as parse_e:
-                print(f"⚠️ JSON 解析逻辑触发兜底: {parse_e}")
-                print("原始输出:\n",response)
+                logging.warning(f"⚠️ JSON 解析逻辑触发兜底: {parse_e}")
+                logging.info("原始输出:\n%s", response)
                 # 如果解析完全失败，把原始内容当做回复
                 reply_text = False
             
@@ -255,7 +256,7 @@ async def ask_AI(messages, api_key, model_name=None):
             usage = res_data.get("usage", {})
             total_tokens = usage.get('total_tokens', 0)
             
-            print(f"📊 消耗: {total_tokens} tokens | 想法: {new_feeling}")
+            logging.info(f"📊 消耗: {total_tokens} tokens | 想法: {new_feeling}")
             
             # 更新全局状态
             DM.update_tokens(total_tokens, model_type="output")
@@ -265,7 +266,7 @@ async def ask_AI(messages, api_key, model_name=None):
             return reply_text_list, score_change, reply_dic_list, total_tokens, new_feeling
 
     except Exception as e:
-        print(f"❌ ask_AI 运行彻底崩溃: {e}")
+        logging.error(f"❌ ask_AI 运行彻底崩溃: {e}")
         return [""], 0, [], 0, "无"
     
 async def get_silicon_balance(api_key: str):
@@ -322,7 +323,7 @@ async def ask_silicon_smart(messages, api_key, model_name="Qwen/Qwen2.5-7B-Instr
 
             # --- 调试打印：使用 formatted_messages 避免字符串索引错误 ---
             usage = res_data.get("usage", {})
-            print(f"📊决策模型消耗: {usage.get('total_tokens')} tokens")
+            logging.info(f"📊决策模型消耗: {usage.get('total_tokens')} tokens")
 
 
             # 统计 Token（可选）
@@ -333,7 +334,7 @@ async def ask_silicon_smart(messages, api_key, model_name="Qwen/Qwen2.5-7B-Instr
             return res_data
 
     except Exception as e:
-        print(f"❌ ask_silicon_smart 运行崩溃: {e}")
+        logging.error(f"❌ ask_silicon_smart 运行崩溃: {e}")
         import traceback
         traceback.print_exc()
         return None # 返回 None 让 main.py 进入错误处理

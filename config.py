@@ -1,8 +1,21 @@
 # config.py
+import logging
 import os
 from dotenv import load_dotenv
 # 加载 .env 文件中的变量
 load_dotenv()
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+LOG_FILE = os.path.join(LOG_DIR, "bot.log")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[logging.FileHandler(LOG_FILE, encoding="utf-8")],
+    force=True,
+)
 
 # --- 账号相关 ---
 MY_BOT_QQ = os.getenv("MY_BOT_QQ", "3921555240")
@@ -22,7 +35,7 @@ DEEP_SEEK_BASE_URL = "https://api.deepseek.com"
 # 逻辑：如果程序在 Docker 里运行，用 'napcat'，否则用 '127.0.0.1'
 # 你也可以直接在 .env 里根据环境配置这个值
 NAPCAT_API = os.getenv("NAPCAT_API", "http://napcat:3000")
-print("NAPCAT_API:",NAPCAT_API)
+logging.info("NAPCAT_API: %s", NAPCAT_API)
 # --- 路径相关 (适配 Docker 容器路径) ---
 # 在 Dockerfile 中我们通常设置 WORKDIR /app
 # 建议使用相对路径，或者根据环境判断

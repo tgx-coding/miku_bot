@@ -6,15 +6,17 @@ services:
     network_mode: host
     restart: always
     command: python3 QQ_Bot.py
+    volumes:
+      - ./logs:/app/logs
     ports:
       - '8080:8080'
     environment:
-      - MY_BOT_QQ
-      - DEVELOPING_NUMBER
-      - DEEP_SEEK_API_KEY
-      - QWEN_API_KEY
-      - SILICONFLOW_API_KEY
-      - DAW_API_KEY
-      - NAPCAT_API
+      - MY_BOT_QQ =
+      - DEVELOPING_NUMBER = 
+      - DEEP_SEEK_API_KEY =
+      - QWEN_API_KEY =
+      - SILICONFLOW_API_KEY =
+      - DAW_API_KEY =
+      - NAPCAT_API =
 
 
