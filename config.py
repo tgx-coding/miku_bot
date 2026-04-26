@@ -21,7 +21,7 @@ DEEP_SEEK_BASE_URL = "https://api.deepseek.com"
 # --- 关键改动：NapCat 适配 ---
 # 逻辑：如果程序在 Docker 里运行，用 'napcat'，否则用 '127.0.0.1'
 # 你也可以直接在 .env 里根据环境配置这个值
-NAPCAT_API = os.getenv("NAPCAT_API", "http://127.0.0.1:3000")
+NAPCAT_API = os.getenv("NAPCAT_API", "http://napcat:3000")
 print("NAPCAT_API:",NAPCAT_API)
 # --- 路径相关 (适配 Docker 容器路径) ---
 # 在 Dockerfile 中我们通常设置 WORKDIR /app
