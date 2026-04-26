@@ -45,7 +45,7 @@ if os.name == 'nt':  # Windows 环境
     DATA_PATH = r".\data.json"
     EMOJI_DIR = r".\emoji"
 else:  # Docker / Linux 环境
-    DATA_PATH = "/app/data/data.json"
+    DATA_PATH = "/app/data.json"
     EMOJI_DIR = "/app/emoji"
 
 # --- 模型设置 ---
