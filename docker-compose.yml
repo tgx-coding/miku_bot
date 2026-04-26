@@ -1,24 +1,12 @@
-services:
-  # NapCat 容器
-  napcat:
-    image: mlikiowa/napcat-docker:latest
-    container_name: napcat
-    volumes:
-      - ./napcat/config:/app/napcat/config
-    ports:
-      - "6099:6099" # WebUI 端口
-    restart: always
+version: "3.8"
 
-  # 你的 Miku Bot 容器
-  miku-bot:
-    build: .  # 使用当前目录下的 Dockerfile 构建
-    container_name: miku-bot
-    depends_on:
-      - napcat  # 确保 napcat 先启动
-    ports:
-      - "8080:8080" # 映射 API 端口和管理后台端口
-    volumes:
-      - ./data:/app/data # 持久化存储 Bot 的数据（如 token 使用量）
-    environment:
-      - TZ=Asia/Shanghai
+services:
+  web:
+    image: ghcr.io/tgx-coding/miku_bot:latest
+    network_mode: host
     restart: always
+    command: python3 QQ_Bot.py
+    ports:
+      - '8080:8080'
+    environment:
+      - test=
