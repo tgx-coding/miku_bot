@@ -1,6 +1,7 @@
 import requests
 import os
 import re
+import logging
 
 
 # 这里的 API 地址可以从 main.py 传进来，或者直接写死
@@ -57,11 +58,11 @@ def send_msg(msg_type, group_id, user_id, text):
         response = requests.post(target_url, json=payload, timeout=10)
         if response.status_code == 200:
             # 这里打印处理后的 text，方便你调试路径对不对
-            print(f"🚀 消息发送成功: {text}")
+            logging.info(f"🚀 消息发送成功: {text}")
         else:
-            print(f"⚠️ 发送失败，状态码: {response.status_code} | 响应: {response.text}")
+            logging.warning(f"⚠️ 发送失败，状态码: {response.status_code} | 响应: {response.text}")
     except Exception as e:
-        print(f"❌ 网络异常: {e}")
+        logging.error(f"❌ 网络异常: {e}")
 
 def get_group_member_dict(group_id):
     """获取群成员名单"""
@@ -77,7 +78,7 @@ def get_group_member_dict(group_id):
                 "title": m.get("title", "")
             } for m in members}
     except Exception as e:
-        print(f"❌ 获取群列表失败: {e}")
+        logging.error(f"❌ 获取群列表失败: {e}")
     return {}
 
 
@@ -100,11 +101,11 @@ async def approve_friend_request(flag, approve=True):
         try:
             response = await client.post(url, json=params)
             if response.status_code == 200:
-                print(f"✅ 已成功处理好友申请")
+                logging.info(f"✅ 已成功处理好友申请")
             else:
-                print(f"❌ 处理申请失败: {response.text}")
+                logging.error(f"❌ 处理申请失败: {response.text}")
         except Exception as e:
-            print(f"❌ 调用 API 出错: {e}")
+            logging.error(f"❌ 调用 API 出错: {e}")
 
 
 async def get_message_content(message_id):
@@ -117,10 +118,10 @@ async def get_message_content(message_id):
             if resp.status_code == 200:
                 data = resp.json().get("data", {})
                 # 返回原始消息字符串
-                # print(f"获取消息引用: {data.get('raw_message', '')}")
+                # logging.info(f"获取消息引用: {data.get('raw_message', '')}")
                 return data.get("raw_message", "")
     except Exception as e:
-        print(f"⚠获取消息失败: {e}")
+        logging.warning(f"⚠获取消息失败: {e}")
     return ""
 
 async def get_forward_msg(res_id):
@@ -134,7 +135,7 @@ async def get_forward_msg(res_id):
                 # 返回的是一个消息节点列表
                 return resp.json().get("data", {}).get("messages", [])
     except Exception as e:
-        print(f"❌ 获取合并转发失败: {e}")
+        logging.error(f"❌ 获取合并转发失败: {e}")
     return []
 
 async def send_poke(group_id, user_id):
@@ -155,11 +156,11 @@ async def send_poke(group_id, user_id):
         try:
             response = await client.post(target_url, json=payload, timeout=10)
             if response.status_code == 200:
-                print(f"👉 已成功回戳用户: {user_id}")
+                logging.info(f"👉 已成功回戳用户: {user_id}")
                 return True
             else:
-                print(f"⚠️ 戳一戳失败，响应: {response.text}")
+                logging.warning(f"⚠️ 戳一戳失败，响应: {response.text}")
         except Exception as e:
-            print(f"❌ 戳一戳接口异常: {e}")
+            logging.error(f"❌ 戳一戳接口异常: {e}")
     return False
 

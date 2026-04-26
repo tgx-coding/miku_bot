@@ -1,5 +1,6 @@
 import uvicorn
 import json
+import logging
 import re
 import asyncio
 import time
@@ -33,7 +34,7 @@ ban_gp = []
 
 async def idle_warm_up_worker():
     """后台暖场任务"""
-    print("🚀 暖场守护进程已启动...")
+    logging.info("🚀 暖场守护进程已启动...")
     while True:
         now = datetime.now()
         current_hour = now.hour
@@ -42,7 +43,7 @@ async def idle_warm_up_worker():
         last_refresh = DM.data.get("last_token_refresh_date", "")
         
         if current_hour >= config.REFRESH_HOUR and last_refresh != today_str:
-            print(f"📅 监测到已过 {config.REFRESH_HOUR}:00，正在重置各群 Token 额度...")
+            logging.info(f"📅 监测到已过 {config.REFRESH_HOUR}:00，正在重置各群 Token 额度...")
             DM.data["group_token_usage"] = {}
             DM.data["last_token_refresh_date"] = today_str
             DM.save_data()
@@ -55,7 +56,7 @@ async def idle_warm_up_worker():
         for group_id, last_time in list(DM.data["last_msg_time"].items()):
             if current_time - last_time > config.IDLE_THRESHOLD:
                 if random.random() < 0.3 and config.WARM_MODE: 
-                    print(f"检测到群 {group_id} 冷场，准备暖场...")
+                    logging.info(f"检测到群 {group_id} 冷场，准备暖场...")
                     idle_prompt = config.WARM_PROMPT
                     
                     try:
@@ -68,35 +69,35 @@ async def idle_warm_up_worker():
                                     await asyncio.sleep(len(text) * 0.4 + 0.5)
                         DM.data["last_msg_time"][str(group_id)] = time.time()
                     except Exception as e:
-                        print(f"❌ 暖场调用失败: {e}")
+                        logging.error(f"❌ 暖场调用失败: {e}")
                 else:
                     DM.data["last_msg_time"][str(group_id)] = current_time - (config.IDLE_THRESHOLD - 300)
-                    print(f"群 {group_id} 冷场中,判定未通过，跳过。")
+                    logging.info(f"群 {group_id} 冷场中,判定未通过，跳过。")
 
         await asyncio.sleep(config.CHECK_INTERVAL)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("🚀 Miku 正在苏醒...")
+    logging.info("🚀 Miku 正在苏醒...")
 
     token_usage = DM.data.get("group_token_usage", {})
     if token_usage:
-        print(f"📊 已载入 {len(token_usage)} 个群聊的 Token 消耗记录")
+        logging.info(f"📊 已载入 {len(token_usage)} 个群聊的 Token 消耗记录")
         for gid, usage in token_usage.items():
-            print(f"   - 群 {gid}: 已消耗 {usage} tokens")
+            logging.info(f"   - 群 {gid}: 已消耗 {usage} tokens")
     else:
-        print("📊 当前无群聊 Token 消耗记录")
+        logging.info("📊 当前无群聊 Token 消耗记录")
 
     if not hasattr(Global, 'chat_locks'): Global.chat_locks = {}
     if not hasattr(Global, 'last_handle_time'): Global.last_handle_time = {}
     bg_task = asyncio.create_task(idle_warm_up_worker())
     yield  
-    print("💤 Miku 准备睡觉了，正在清理任务...")
+    logging.info("💤 Miku 准备睡觉了，正在清理任务...")
     bg_task.cancel() 
     try:
         await bg_task
     except asyncio.CancelledError:
-        print("✅ 后台任务已安全停止")
+        logging.info("✅ 后台任务已安全停止")
 
 app = FastAPI(lifespan=lifespan)
 
@@ -134,7 +135,7 @@ async def handle_friend_request(data):
     """处理自动同意好友请求"""
     if data.get("request_type") == "friend":
         flag, user_id, comment = data.get("flag"), data.get("user_id"), data.get("comment")
-        print(f"🤝 检测到好友申请: QQ({user_id}), 验证信息: {comment}")
+        logging.info(f"🤝 检测到好友申请: QQ({user_id}), 验证信息: {comment}")
         await approve_friend_request(flag, True) 
         send_msg("private", None, str(user_id), "你好喵！我是猫葱，以后请多指教喵~")
         return {"status": "ok"}
@@ -277,7 +278,7 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
 
     except Exception as e:
         import traceback
-        print(f"❌ 开发者指令执行异常:\n{traceback.format_exc()}")
+        logging.error(f"❌ 开发者指令执行异常:\n{traceback.format_exc()}")
         return True 
 
     return False
@@ -333,7 +334,7 @@ async def process_and_send_ai_reply(reply_list, message_type, target_id, sender_
                 # 注意：send_msg 如果是同步的，这里直接调用；如果是异步的需要加 await
                 send_msg(message_type, target_id, sender_id, clean_part)
             except Exception as e:
-                print(f"❌ 消息发送失败(已屏蔽外部报错): {e}")
+                logging.error(f"❌ 消息发送失败(已屏蔽外部报错): {e}")
 
             # 4. 模拟打字/发送延迟
             if "[CQ:image" in clean_part:
@@ -372,9 +373,9 @@ async def run_info_extraction(session_id, segment):
             extracted_data = json.loads(clean_json)
             if extracted_data:
                 DM.save_extracted_info(extracted_data)
-                print(f"🔍 [人设提取] 已更新会话 {session_id} 涉及的成员档案")
+                logging.info(f"🔍 [人设提取] 已更新会话 {session_id} 涉及的成员档案")
     except Exception as e:
-        print(f"❌ [人设提取] 失败: {e}")
+        logging.error(f"❌ [人设提取] 失败: {e}")
 
 
 
@@ -387,7 +388,7 @@ async def run_info_extraction(session_id, segment):
 # ==========================================
 @app.post("/")
 async def handle_event(request: Request):
-    print('成功接收信息')
+    logging.info('成功接收信息')
     data = await request.json()
     post_type = data.get("post_type")
     
@@ -412,9 +413,9 @@ async def handle_event(request: Request):
         message_type = data.get("message_type")
     # --- 2. 识别并重定向“戳一戳”事件 ---
     if post_type == "notice":
-        print('检测到提示信息')
+        logging.info('检测到提示信息')
         if data.get("notice_type") == "notify" and data.get("sub_type") == "poke":
-            print('检测到戳一戳')
+            logging.info('检测到戳一戳')
             target_id = data.get("target_id")
             # 注意：poke 事件里的发送者键名是 sender_id，不是 user_id
             real_sender_id = str(data.get("sender_id", ""))
@@ -426,7 +427,7 @@ async def handle_event(request: Request):
                 user_info = member_info.get(real_sender_id, {})
                 sender_name = user_info.get("name", f"用户({real_sender_id})")
 
-                print(f"👉 收到来自 {sender_name} 的戳一戳")
+                logging.info(f"👉 收到来自 {sender_name} 的戳一戳")
                 
                 # 【关键点】：将 notice 事件伪装成 message 变量
                 # 这样下方的逻辑就会把它当成一条普通消息处理
@@ -435,31 +436,31 @@ async def handle_event(request: Request):
                 message_type = "group" if group_id else "private"
                 # 这里不 return，让程序继续往下走
             else:
-                print('被戳的不是自己，跳过')
+                logging.info('被戳的不是自己，跳过')
                 return {"status": "ignore"}
         else:
-            print('其他提示信息，跳过')
+            logging.info('其他提示信息，跳过')
             return {"status": "ignore"}
         
     # 调试模式指定群聊
     if config.DEBUG_MODE:
         if group_id != config.DEBUG_GP and message_type == "group":
-            print("非调试群聊，跳过")
+            logging.info("非调试群聊，跳过")
             return {"status": "ok"}
 
     # 拦截黑名单的群
     if group_id in config.BLACKLIST:
-        print("黑名单内群聊，跳过")
+        logging.info("黑名单内群聊，跳过")
         return {"status": "ok"}
     
     # 拦截ban掉的群聊
     if group_id in ban_gp:
-        print("群聊被ban，跳过")
+        logging.info("群聊被ban，跳过")
         return {"status": "ok"}
     
     # 拦截开发者指令
     if await handle_developer_command(raw_msg, message_type, target_id, sender_id, data, group_id):
-        print("开发者指令，执行")
+        logging.info("开发者指令，执行")
         return {"status": "ok"}
 
 
@@ -472,12 +473,12 @@ async def handle_event(request: Request):
         if used_tokens >= config.GROUP_TOKEN_LIMIT and str(sender_id) != str(config.DEVELOPING_NUMBER):
             if f"[CQ:at,qq={config.MY_BOT_QQ}]" in raw_msg:
                 pass
-            print("额度爆表群聊，跳过")
+            logging.info("额度爆表群聊，跳过")
                 # send_msg("group", group_id, None, "呜... 猫葱好累啊，要睡觉了喵... 💤")
             return {"status": "ok"}
         
         if is_sleep_time:
-            print(f"💤 休息时间，群聊 {group_id} 仅记录不回复。")
+            logging.info(f"💤 休息时间，群聊 {group_id} 仅记录不回复。")
             return {"status": "ok"}
 
 
@@ -486,13 +487,13 @@ async def handle_event(request: Request):
     if not raw_msg and post_type != "message":
         if post_type == "request":
             return await handle_friend_request(data)
-        print('非正常信息，跳过')
+        logging.info('非正常信息，跳过')
         return {"status": "ignore"}
 
 
     # 排除机器人自言自语
     if sender_id == str(config.MY_BOT_QQ):
-        print('自己的信息，跳过')
+        logging.info('自己的信息，跳过')
         return {"status": "ignore"}
 
 
@@ -513,15 +514,15 @@ async def handle_event(request: Request):
     last_time = Global.last_handle_time.get(context_id, 0) 
     if (current_time - last_time < config.REPLY_CD) or (time.time() - data.get("time", time.time()) > 30):
         if f"[CQ:at,qq={config.MY_BOT_QQ}]" not in raw_msg:
-            print('冷却未完成，跳过')
+            logging.info('冷却未完成，跳过')
             return {"status": "ignore"}
 
     async with Global.chat_locks[context_id]:
         try:
             # 1. 解析消息内容
             input_message = await explain_message(str(raw_msg), msg_id) 
-            print("-" * 52)
-            print(f"📥 收到并解析消息: {input_message}")
+            logging.info("-" * 52)
+            logging.info(f"📥 收到并解析消息: {input_message}")
 
             # 2. 获取当前状态 
             current_feeling = DM.data.get("feeling", "无") 
@@ -552,18 +553,18 @@ async def handle_event(request: Request):
                 Global.session_counts[context_id] += 1
             
             this_count = Global.session_counts[context_id]
-            print(f"📊 会话 [{context_id}] 当前长度: {this_count} (目标触发: 每 10 条)")
+            logging.info(f"📊 会话 [{context_id}] 当前长度: {this_count} (目标触发: 每 10 条)")
 
             # 触发判断：每 10 条触发一次，且历史里确实有东西
             if this_count > 0 and this_count % 50 == 0:
                 segment = history[-50:] if len(history) >= 50 else history
-                print(f"🎯 [人设提取] 命中周期，开始分析 {context_id} 的信息...")
+                logging.info(f"🎯 [人设提取] 命中周期，开始分析 {context_id} 的信息...")
                 asyncio.create_task(run_info_extraction(context_id, segment))
 
             # 队列合并与跳过处理逻辑
             # 判断自己是否是等待锁的期间，最后进来的那条消息
             if Global.latest_req_id.get(context_id) != current_req_id:
-                print(f"⏳ [{context_id}] 消息已被合并至上下文。检测到有更新的消息正在排队，跳过当前AI处理以加速响应。")
+                logging.info(f"⏳ [{context_id}] 消息已被合并至上下文。检测到有更新的消息正在排队，跳过当前AI处理以加速响应。")
                 return {"status": "ok"}
             
 
@@ -584,7 +585,7 @@ async def handle_event(request: Request):
                 reply_json = json.loads(content_str)
 
                 if reply_json.get('should') is True:
-                    print(f"[{context_id}] Miku 决定回复")
+                    logging.info(f"[{context_id}] Miku 决定回复")
                     
                     # 1. 获取涉及到的用户 QQ (现状：recent_messages 已获取)
                     history = DM.data["chat_contexts"].get(context_id, [])
@@ -599,7 +600,7 @@ async def handle_event(request: Request):
                                     involved_qqs.add(match.group(1))
                         else:
                             # 如果发现是脏数据（元组等），打印出来方便你清理，但不让程序崩溃
-                            print(f"⚠️ 跳过历史记录中的非字典消息: {msg} (类型: {type(msg)})")
+                            logging.warning(f"⚠️ 跳过历史记录中的非字典消息: {msg} (类型: {type(msg)})")
                     # 2. 获取并格式化状态（交给 DM 处理，不要在 main.py 里拼字符串）
                     # 假设你在 DM 中写一个 get_compact_status 方法
                     status_table, archive_text = DM.get_compact_status_and_archive(involved_qqs)
@@ -616,7 +617,7 @@ async def handle_event(request: Request):
                     current_context = [
                         {"role": "system", "content": dynamic_system_prompt}
                     ] + history[-config.MAX_HISTORY_LIMIT:]                    
-                    # print("提示词：",current_context)
+                    # logging.info("提示词：",current_context)
                     # 1. 获取 AI 回复
                     result = await ask_AI(
                         messages=current_context, 
@@ -663,19 +664,19 @@ async def handle_event(request: Request):
 
                     new_favor = DM.add_favor(sender_id, score_change)
 
-                    print(f"💖 好感度变动: {score_change} (目标QQ: {sender_id}, 当前: {new_favor})")
-                    print("-" * 52)
+                    logging.info(f"💖 好感度变动: {score_change} (目标QQ: {sender_id}, 当前: {new_favor})")
+                    logging.info("-" * 52)
                 else:
-                    print(f"[{context_id}]  Miku 正在围观，不打算说话。")
-                    print("-" * 52)
+                    logging.info(f"[{context_id}]  Miku 正在围观，不打算说话。")
+                    logging.info("-" * 52)
 
         except json.JSONDecodeError:
-            print("❌ AI 决策层返回了非法的 JSON 格式，已静默拦截。")
+            logging.warning("❌ AI 决策层返回了非法的 JSON 格式，已静默拦截。")
         except Exception as e:
             # 绝对拦截，任何崩溃都不会发给QQ，只在后台打印
-            print(f"❌ 运行发生致命错误 (已拦截保护): {e}")
+            logging.error(f"❌ 运行发生致命错误 (已拦截保护): {e}")
             import traceback
-            print("❌ 发现致命错误，正在打印堆栈追踪：")
+            logging.error("❌ 发现致命错误，正在打印堆栈追踪：")
             traceback.print_exc()
         finally:
             # 确保无论发生什么错误，CD时间都会被刷新，避免卡死或穿透漏洞
