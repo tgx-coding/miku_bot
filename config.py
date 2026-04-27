@@ -1,9 +1,16 @@
 # config.py
 import logging
 import os
+import time
 from dotenv import load_dotenv
 # 加载 .env 文件中的变量
 load_dotenv()
+
+# 默认使用东八区，支持通过环境变量 TZ 覆盖。
+TIMEZONE = os.getenv("TZ", "Asia/Shanghai")
+os.environ["TZ"] = TIMEZONE
+if hasattr(time, "tzset"):
+    time.tzset()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, "logs")
@@ -11,11 +18,16 @@ LOG_FILE = os.path.join(LOG_DIR, "bot.log")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[logging.FileHandler(LOG_FILE, encoding="utf-8")],
     force=True,
 )
+
+# Third-party loggers can be very chatty under webhook traffic; keep only warnings.
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # --- 账号相关 ---
 MY_BOT_QQ = os.getenv("MY_BOT_QQ", "3921555240")
