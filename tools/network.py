@@ -22,26 +22,37 @@ def send_msg(msg_type, group_id, user_id, text):
     matches = re.findall(pattern, text)
 
     for filename in matches:
-        # 排除掉已经是网络链接或 base64 的情况
-        if filename.startswith("http") or filename.startswith("base64://"):
+        # 跳过已经是 base64 的
+        if filename.startswith("base64://"):
             continue
-
-        filename_clean = filename.strip()
         
-        # 自动补全 .jpg 后缀
-        if not filename_clean.lower().endswith(".jpg"):
-            filename_clean = f"{filename_clean}.jpg"
-        
-        # 构造绝对路径并读取文件转为 base64
-        abs_path = os.path.abspath(os.path.join(config.EMOJI_DIR, filename_clean))
-        
-        try:
-            with open(abs_path, "rb") as f:
-                img_data = base64.b64encode(f.read()).decode("utf-8")
-            file_url = f"base64://{img_data}"
-        except FileNotFoundError:
-            logging.error(f"❌ 找不到表情文件: {abs_path}")
+        # 如果是旧格式 file://，读取后转 base64
+        if filename.startswith("file://"):
+            old_path = filename.replace("file://", "").lstrip("/")
+            # file:///app/emoji/x.png → /app/emoji/x.png
+            abs_path = "/" + old_path if not old_path.startswith("/") else "/" + old_path.lstrip("/")
+            try:
+                with open(abs_path, "rb") as f:
+                    img_data = base64.b64encode(f.read()).decode("utf-8")
+                file_url = f"base64://{img_data}"
+            except FileNotFoundError:
+                logging.error(f"❌ 找不到图片文件: {abs_path}")
+                continue
+        elif filename.startswith("http"):
             continue
+        else:
+            # 纯文件名：自动补全 .jpg 后缀
+            filename_clean = filename.strip()
+            if not filename_clean.lower().endswith(".jpg"):
+                filename_clean = f"{filename_clean}.jpg"
+            abs_path = os.path.abspath(os.path.join(config.EMOJI_DIR, filename_clean))
+            try:
+                with open(abs_path, "rb") as f:
+                    img_data = base64.b64encode(f.read()).decode("utf-8")
+                file_url = f"base64://{img_data}"
+            except FileNotFoundError:
+                logging.error(f"❌ 找不到表情文件: {abs_path}")
+                continue
         
         # 替换原始文本中的简易 CQ 码
         old_cq = f"[CQ:image,file={filename}]"
@@ -66,8 +77,9 @@ def send_msg(msg_type, group_id, user_id, text):
     try:
         response = requests.post(target_url, json=payload, timeout=10)
         if response.status_code == 200:
-            # 这里打印处理后的 text，方便你调试路径对不对
-            logging.info(f"🚀 消息发送成功: {text}")
+            # 记录日志时隐藏 base64 内容，节省空间
+            log_text = re.sub(r'base64://[^,\]]+', 'base64://<图片数据已省略>', text)
+            logging.info(f"🚀 消息发送成功: {log_text}")
         else:
             logging.warning(f"⚠️ 发送失败，状态码: {response.status_code} | 响应: {response.text}")
     except Exception as e:

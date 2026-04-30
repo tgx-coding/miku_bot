@@ -5,7 +5,8 @@ import re
 import asyncio
 import time
 import random
-import os  
+import os
+import base64
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from datetime import datetime
@@ -336,13 +337,27 @@ async def process_and_send_ai_reply(reply_list, message_type, target_id, sender_
                 match = re.search(r'file=([^,\]]+)', clean_part)
                 if match:
                     file_name = match.group(1)
-                    if not (file_name.startswith("http") or ":" in file_name):
+                    if not (file_name.startswith("http") or file_name.startswith("base64://") or ":" in file_name):
                         full_file_name = file_name if "." in file_name else f"{file_name}.jpg"
                         abs_path = os.path.join(config.EMOJI_DIR, full_file_name)
-                        # 确保路径斜杠在 Windows/Linux 下通用
-                        clean_path = abs_path.replace("\\", "/")
-                        final_file_url = f"file:///{clean_path}"
-                        clean_part = clean_part.replace(file_name, final_file_url)
+                        try:
+                            with open(abs_path, "rb") as f:
+                                img_data = base64.b64encode(f.read()).decode("utf-8")
+                            final_file_url = f"base64://{img_data}"
+                            clean_part = clean_part.replace(file_name, final_file_url)
+                        except FileNotFoundError:
+                            logging.error(f"❌ 找不到表情文件: {abs_path}")
+                    elif file_name.startswith("file://"):
+                        # 旧格式 file:// 改成 base64 重读
+                        old_path = file_name.replace("file://", "")
+                        if os.path.exists(old_path):
+                            try:
+                                with open(old_path, "rb") as f:
+                                    img_data = base64.b64encode(f.read()).decode("utf-8")
+                                final_file_url = f"base64://{img_data}"
+                                clean_part = clean_part.replace(file_name, final_file_url)
+                            except Exception:
+                                pass
 
             # 3. 内部静默发送
             try:
