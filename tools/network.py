@@ -2,6 +2,8 @@ import requests
 import os
 import re
 import logging
+import base64
+import config
 
 
 # 这里的 API 地址可以从 main.py 传进来，或者直接写死
@@ -20,24 +22,31 @@ def send_msg(msg_type, group_id, user_id, text):
     matches = re.findall(pattern, text)
 
     for filename in matches:
-        # 排除掉已经是网络链接的情况
-        if not filename.startswith("http"):
-            # 去掉文件名可能的空格，拼上 .jpg 后缀
-            filename_clean = filename.strip()
-            
-            # 构造绝对路径：目录 + 文件名 + .jpg
-            if not filename_clean.lower().endswith(".jpg"):
-                filename_clean = f"{filename_clean}.jpg"
-            
-            abs_path = os.path.abspath(os.path.join(config.EMOJI_DIR, filename_clean))
-            
-            clean_path = abs_path.replace("\\", "/") 
-            file_url = f"file:///{clean_path}"
-            
-            # 替换原始文本中的简易 CQ 码
-            old_cq = f"[CQ:image,file={filename}]"
-            new_cq = f"[CQ:image,file={file_url}]"
-            text = text.replace(old_cq, new_cq)
+        # 排除掉已经是网络链接或 base64 的情况
+        if filename.startswith("http") or filename.startswith("base64://"):
+            continue
+
+        filename_clean = filename.strip()
+        
+        # 自动补全 .jpg 后缀
+        if not filename_clean.lower().endswith(".jpg"):
+            filename_clean = f"{filename_clean}.jpg"
+        
+        # 构造绝对路径并读取文件转为 base64
+        abs_path = os.path.abspath(os.path.join(config.EMOJI_DIR, filename_clean))
+        
+        try:
+            with open(abs_path, "rb") as f:
+                img_data = base64.b64encode(f.read()).decode("utf-8")
+            file_url = f"base64://{img_data}"
+        except FileNotFoundError:
+            logging.error(f"❌ 找不到表情文件: {abs_path}")
+            continue
+        
+        # 替换原始文本中的简易 CQ 码
+        old_cq = f"[CQ:image,file={filename}]"
+        new_cq = f"[CQ:image,file={file_url}]"
+        text = text.replace(old_cq, new_cq)
 
     # 3. 根据类型选择接口和构造 payload
     if msg_type == "group":
@@ -83,7 +92,6 @@ def get_group_member_dict(group_id):
 
 
 import httpx
-import config
 
 async def approve_friend_request(flag, approve=True):
     """
