@@ -29,8 +29,11 @@ def send_msg(msg_type, group_id, user_id, text):
         # 如果是旧格式 file://，读取后转 base64
         if filename.startswith("file://"):
             old_path = filename.replace("file://", "").lstrip("/")
-            # file:///app/emoji/x.png → /app/emoji/x.png
             abs_path = "/" + old_path if not old_path.startswith("/") else "/" + old_path.lstrip("/")
+            # 统一将后缀改为 .jpg
+            if not abs_path.lower().endswith(".jpg"):
+                base_name = abs_path.rsplit(".", 1)[0]
+                abs_path = f"{base_name}.jpg"
             try:
                 with open(abs_path, "rb") as f:
                     img_data = base64.b64encode(f.read()).decode("utf-8")

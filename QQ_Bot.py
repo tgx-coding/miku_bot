@@ -338,7 +338,9 @@ async def process_and_send_ai_reply(reply_list, message_type, target_id, sender_
                 if match:
                     file_name = match.group(1)
                     if not (file_name.startswith("http") or file_name.startswith("base64://") or ":" in file_name):
-                        full_file_name = file_name if "." in file_name else f"{file_name}.jpg"
+                        # 统一将后缀改为 .jpg
+                        base_name = file_name.rsplit(".", 1)[0] if "." in file_name else file_name
+                        full_file_name = f"{base_name}.jpg"
                         abs_path = os.path.join(config.EMOJI_DIR, full_file_name)
                         try:
                             with open(abs_path, "rb") as f:
