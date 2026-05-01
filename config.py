@@ -17,8 +17,12 @@ LOG_DIR = os.path.join(BASE_DIR, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "bot.log")
 os.makedirs(LOG_DIR, exist_ok=True)
 
+# 日志级别: DEBUG_LOG=true 时启用 DEBUG，否则可通过 LOG_LEVEL 自定义
+_log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
+if os.getenv("DEBUG_LOG", "").lower() == "true":
+    _log_level_str = "DEBUG"
 logging.basicConfig(
-    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    level=getattr(logging, _log_level_str, logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[logging.FileHandler(LOG_FILE, encoding="utf-8")],
     force=True,

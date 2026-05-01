@@ -19,6 +19,7 @@ services:
       - SILICONFLOW_API_KEY=
       - DAW_API_KEY=
       - NAPCAT_API=http://localhost:3000/
+      - DEBUG_LOG=false
 
 
 
