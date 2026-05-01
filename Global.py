@@ -19,3 +19,5 @@ last_handle_time = {}
 chat_locks = {}
 
 current_len = {}
+
+running = True # bot开启状态

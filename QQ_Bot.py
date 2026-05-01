@@ -46,7 +46,7 @@ def log_info_throttled(key, interval_sec, message):
 
 async def idle_warm_up_worker():
     """后台暖场任务"""
-    logging.info("🚀 暖场守护进程已启动...")
+    # logging.info("🚀 暖场守护进程已启动...")
     while True:
         now = datetime.now()
         current_hour = now.hour
@@ -68,7 +68,7 @@ async def idle_warm_up_worker():
         for group_id, last_time in list(DM.data["last_msg_time"].items()):
             if current_time - last_time > config.IDLE_THRESHOLD:
                 if random.random() < 0.3 and config.WARM_MODE: 
-                    logging.info(f"检测到群 {group_id} 冷场，准备暖场...")
+                    # logging.info(f"检测到群 {group_id} 冷场，准备暖场...")
                     idle_prompt = config.WARM_PROMPT
                     
                     try:
@@ -94,7 +94,7 @@ async def idle_warm_up_worker():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logging.info("🚀 Miku 正在苏醒...")
+    logging.info("猫葱正在苏醒...")
 
     token_usage = DM.data.get("group_token_usage", {})
     if token_usage:
@@ -184,69 +184,99 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
     # 没被提到则不走指令检查
     if f"[CQ:at,qq={config.MY_BOT_QQ}]" not in raw_msg:
         return False
-
+    logging.debug(f"识别到命令:{raw_msg}")
     try:
         # --- 1. 开发者 (MASTER) 独占指令 ---
-        if str(sender_id) == str(config.DEVELOPING_NUMBER):
-            if "关闭bot" in raw_msg:
-                send_msg(message_type, target_id, sender_id, "主人让我睡觉了喵，拜拜~")
-                os._exit(0) 
+        if is_admin(event) or str(sender_id) == str(config.DEVELOPING_NUMBER):
+            if str(sender_id) == str(config.DEVELOPING_NUMBER):
+                if "关闭bot" in raw_msg:
+                    send_msg(message_type, target_id, sender_id, "主人让我睡觉了喵，拜拜~")
+                    Global.running = False
+                    logging.debug("已关闭Bot")
 
-            if "更新表情包" in raw_msg or "刷新表情包" in raw_msg:
-                emoji_list = DM.get_emoji_list()
-                send_msg(message_type, target_id, sender_id, "哇多了好多表情包呀，谢谢主人！")
-                return True
-            
-            # 开发者查询 Token 消耗
+                if "开启bot" in raw_msg:
+                    send_msg(message_type, target_id, sender_id, "啊呜，起床了喵~")
+                    Global.running = True
+                    logging.debug("已开启Bot")
+
+                if "更新表情包" in raw_msg or "刷新表情包" in raw_msg:
+                    try:
+                        emoji_list = DM.get_emoji_list()
+                        send_msg(message_type, target_id, sender_id, "哇多了好多表情包呀，谢谢主人！")
+                        logging.debug("成功刷新表情包")
+                    except Exception as e:
+                        send_msg(message_type, target_id, sender_id, "呜呜呜我收不到表情包呜呜呜")
+                        logging.error(f"刷新表情包失败\n{e}")
+                    return True
+                
+                # 开发者查询 Token 消耗
+                if any(k in raw_msg for k in ["token", "tk", "余额"]):
+                    logging.debug("进入查询")
+                    if "qwen" in raw_msg:
+                        send_msg(message_type, target_id, sender_id, "QWEN查询: https://bailian.console.aliyun.com")
+                    if "ds" in raw_msg or "deepseek" in raw_msg:
+                        try:
+                            tokens = "Deepseek:" + await get_balance(config.DEEP_SEEK_API_KEY)
+                            send_msg(message_type, target_id, sender_id, tokens)
+                        except Exception as e:
+                            send_msg(message_type, target_id, sender_id, "猫找不到喵......")
+                            logging.error("查询deepseek token失败")
+                    if "平均" in raw_msg:
+                        d_stats = DM.data.get("decision_token_count", {"all_tokens": 0, "times": 0})
+                        o_stats = DM.data.get("output_token_count", {"all_tokens": 0, "times": 0})
+                        results = []
+                        if d_stats["times"] > 0:
+                            d_avg = d_stats["all_tokens"] / d_stats["times"]
+                            results.append(f"决策层:\n  平均: {d_avg:.2f} tokens\n  总共: {d_stats['all_tokens']} tokens\n  共调用 {d_stats['times']} 次")
+                        else:
+                            results.append("决策层：暂无数据喵")
+                        if o_stats["times"] > 0:
+                            o_avg = o_stats["all_tokens"] / o_stats["times"]
+                            results.append(f"输出层:\n  平均: {o_avg:.2f} tokens\n  总共: {o_stats['all_tokens']} tokens\n  共调用 {o_stats['times']} 次")
+                        else:
+                            results.append("输出层：暂无数据喵")
+                        send_msg(message_type, target_id, sender_id, "\n".join(results))
+
+                    if "all" in raw_msg:
+                        try:
+                            tokens = await get_silicon_balance(config.SILICONFLOW_API_KEY)
+                            send_msg(message_type, target_id, sender_id, tokens)
+                        except Exception as e:
+                            send_msg(message_type, target_id, sender_id, "猫找不到喵......")
+                            logging.error("查询silicon token失败")
+
+
             if any(k in raw_msg for k in ["token", "tk", "余额"]):
-                if "qwen" in raw_msg:
-                    send_msg(message_type, target_id, sender_id, "QWEN查询: https://bailian.console.aliyun.com")
-                if "ds" in raw_msg or "deepseek" in raw_msg:
-                    tokens = "Deepseek:" + await get_balance(config.DEEP_SEEK_API_KEY)
-                    send_msg(message_type, target_id, sender_id, tokens)
-                if "平均" in raw_msg:
-                    d_stats = DM.data.get("decision_token_count", {"all_tokens": 0, "times": 0})
-                    o_stats = DM.data.get("output_token_count", {"all_tokens": 0, "times": 0})
-                    results = []
-                    if d_stats["times"] > 0:
-                        d_avg = d_stats["all_tokens"] / d_stats["times"]
-                        results.append(f"决策层:\n  平均: {d_avg:.2f} tokens\n  总共: {d_stats['all_tokens']} tokens\n  共调用 {d_stats['times']} 次")
-                    else:
-                        results.append("决策层：暂无数据喵")
-                    if o_stats["times"] > 0:
-                        o_avg = o_stats["all_tokens"] / o_stats["times"]
-                        results.append(f"输出层:\n  平均: {o_avg:.2f} tokens\n  总共: {o_stats['all_tokens']} tokens\n  共调用 {o_stats['times']} 次")
-                    else:
-                        results.append("输出层：暂无数据喵")
-                    send_msg(message_type, target_id, sender_id, "\n".join(results))
-
-                if "all" in raw_msg:
-                    tokens = await get_silicon_balance(config.SILICONFLOW_API_KEY)
-                    send_msg(message_type, target_id, sender_id, tokens)
-
                 if any(k in raw_msg for k in ["gp", "group"]):
+                    try:
+                        total_data = DM.data.get("total_group_usage", {})
+                        daily_data = DM.data.get("group_token_usage", {})
+                        
+                        # 将 group_id 转为字符串，确保能匹配上字典里的 key
+                        gid_str = str(group_id) 
+                        
+                        # 直接获取当前群的数据，如果没有则默认为 0
+                        daily = daily_data.get(gid_str, 0)
+                        total = total_data.get(gid_str, 0)
+                        o_stats = DM.data.get("output_token_count", {"all_tokens": 0, "times": 0})
+                        o_avg = o_stats["all_tokens"] / o_stats["times"]
+                        late_time = (config.GROUP_TOKEN_LIMIT - daily) / o_avg # 剩余对话
 
-                    total_data = DM.data.get("total_group_usage", {})
-                    daily_data = DM.data.get("group_token_usage", {})
-                    
-                    # 将 group_id 转为字符串，确保能匹配上字典里的 key
-                    gid_str = str(group_id) 
-                    
-                    # 直接获取当前群的数据，如果没有则默认为 0
-                    daily = daily_data.get(gid_str, 0)
-                    total = total_data.get(gid_str, 0)
-                    o_stats = DM.data.get("output_token_count", {"all_tokens": 0, "times": 0})
-                    o_avg = o_stats["all_tokens"] / o_stats["times"]
-                     
-                    msg = f"当前群聊 Token 统计 ({gid_str})：\n"
-                    msg += f"   今日消耗: {daily}\n"
-                    msg += f"   累计消耗: {total}\n"
-                    msg += f"   今日剩余token: {config.GROUP_TOKEN_LIMIT - daily}\n"
-                    msg += f"   (约剩余:{(config.GROUP_TOKEN_LIMIT - daily) / o_avg:.0f} 次对话)"
-                    send_msg(message_type, target_id, sender_id, msg)
+                        msg =  f"当前群聊 Token 统计 ({gid_str})：\n"
+                        msg += f"   今日消耗: {daily}\n"
+                        msg += f"   累计消耗: {total}\n"
+                        msg += f"   今日剩余token: {max(config.GROUP_TOKEN_LIMIT - daily, 0)}\n"
+                        if late_time > 0.0 :
+                            msg += f"   (约剩余:{late_time:.0f} 次对话)"
+                        else:
+                            msg += f"   (今日对话次数已用完)"
+                        send_msg(message_type, target_id, sender_id, msg)
+                    except Exception as e :
+                        send_msg(message_type, target_id, sender_id, "猫找不到喵......")
+                        logging.error(f"查询群token失败{e}")
                 
                 return True
-            if any(k in raw_msg for k in ["禁言bot", "禁言BOT", "禁言Bot"]): # 管理员让 Bot 闭嘴
+            if any(k in raw_msg for k in ["禁言bot", "禁言BOT", "禁言Bot"]): 
                 if group_id not in ban_gp:
                     ban_gp.append(group_id)
                 return True
@@ -269,27 +299,33 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
                     ban_gp.remove(group_id)   
                 return True 
             if any(k in raw_msg for k in ["额度查询", "token查询", "查询token", "查询额度"]):
-                total_data = DM.data.get("total_group_usage", {})
-                daily_data = DM.data.get("group_token_usage", {})
-                
-                # 将 group_id 转为字符串，确保能匹配上字典里的 key
-                gid_str = str(group_id) 
-                
-                # 直接获取当前群的数据，如果没有则默认为 0
-                daily = daily_data.get(gid_str, 0)
-                total = total_data.get(gid_str, 0)
-                
-                o_stats = DM.data.get("output_token_count", {"all_tokens": 0, "times": 0})
-                o_avg = o_stats["all_tokens"] / o_stats["times"]
-                
-                msg = f"当前群聊 Token 统计 ({gid_str})：\n"
-                msg += f"   今日消耗: {daily}\n"
-                msg += f"   累计消耗: {total}\n"
-                msg += f"   今日剩余token: {config.GROUP_TOKEN_LIMIT - daily}\n"
-                msg += f"   (约剩余: {(config.GROUP_TOKEN_LIMIT - daily) / o_avg:.0f}次对话)"
-                send_msg(message_type, target_id, sender_id, msg)
-                
-                return True
+                try:
+                    total_data = DM.data.get("total_group_usage", {})
+                    daily_data = DM.data.get("group_token_usage", {})
+                    
+                    # 将 group_id 转为字符串，确保能匹配上字典里的 key
+                    gid_str = str(group_id) 
+                    
+                    # 直接获取当前群的数据，如果没有则默认为 0
+                    daily = daily_data.get(gid_str, 0)
+                    total = total_data.get(gid_str, 0)
+                    o_stats = DM.data.get("output_token_count", {"all_tokens": 0, "times": 0})
+                    o_avg = o_stats["all_tokens"] / o_stats["times"]
+                    late_time = (config.GROUP_TOKEN_LIMIT - daily) / o_avg # 剩余对话
+
+                    msg =  f"当前群聊 Token 统计 ({gid_str})：\n"
+                    msg += f"   今日消耗: {daily}\n"
+                    msg += f"   累计消耗: {total}\n"
+                    msg += f"   今日剩余token: {max(config.GROUP_TOKEN_LIMIT - daily, 0)}\n"
+                    if late_time > 0.0 :
+                        msg += f"   (约剩余:{late_time:.0f} 次对话)"
+                    else:
+                        msg += f"   (今日对话次数已用完)"
+                    send_msg(message_type, target_id, sender_id, msg)
+                except Exception as e :
+                    send_msg(message_type, target_id, sender_id, "猫找不到喵......")
+                    logging.error(f"查询群token失败{e}")
+                return True 
 
 
     except Exception as e:
@@ -420,7 +456,10 @@ async def run_info_extraction(session_id, segment):
 # ==========================================
 @app.post("/")
 async def handle_event(request: Request):
-    logging.debug('成功接收信息')
+    if not Global.running: # 关闭bot时的拦截
+        return {"status": "ok"}
+    
+    print('成功接收信息')
     data = await request.json()
     post_type = data.get("post_type")
     
@@ -443,11 +482,12 @@ async def handle_event(request: Request):
         raw_msg = data.get("raw_message", "").strip()
         sender_id = str(data.get("user_id", ""))
         message_type = data.get("message_type")
+
     # --- 2. 识别并重定向“戳一戳”事件 ---
     if post_type == "notice":
-        logging.debug('检测到提示信息')
+        print('检测到提示信息')
         if data.get("notice_type") == "notify" and data.get("sub_type") == "poke":
-            logging.debug('检测到戳一戳')
+            print('检测到戳一戳')
             target_id = data.get("target_id")
             # 注意：poke 事件里的发送者键名是 sender_id，不是 user_id
             real_sender_id = str(data.get("sender_id", ""))
@@ -459,7 +499,7 @@ async def handle_event(request: Request):
                 user_info = member_info.get(real_sender_id, {})
                 sender_name = user_info.get("name", f"用户({real_sender_id})")
 
-                logging.debug(f"👉 收到来自 {sender_name} 的戳一戳")
+                print(f"👉 收到来自 {sender_name} 的戳一戳")
                 
                 # 【关键点】：将 notice 事件伪装成 message 变量
                 # 这样下方的逻辑就会把它当成一条普通消息处理
@@ -468,31 +508,31 @@ async def handle_event(request: Request):
                 message_type = "group" if group_id else "private"
                 # 这里不 return，让程序继续往下走
             else:
-                logging.debug('被戳的不是自己，跳过')
+                print('被戳的不是自己，跳过')
                 return {"status": "ignore"}
         else:
-            logging.debug('其他提示信息，跳过')
+            print('其他提示信息，跳过')
             return {"status": "ignore"}
         
     # 调试模式指定群聊
     if config.DEBUG_MODE:
         if group_id != config.DEBUG_GP and message_type == "group":
-            logging.debug("非调试群聊，跳过")
+            print("非调试群聊，跳过")
             return {"status": "ok"}
 
     # 拦截黑名单的群
     if group_id in config.BLACKLIST:
-        logging.debug("黑名单内群聊，跳过")
+        print("黑名单内群聊，跳过")
         return {"status": "ok"}
     
     # 拦截ban掉的群聊
     if group_id in ban_gp:
-        logging.debug("群聊被ban，跳过")
+        print("群聊被ban，跳过")
         return {"status": "ok"}
     
     # 拦截开发者指令
     if await handle_developer_command(raw_msg, message_type, target_id, sender_id, data, group_id):
-        logging.info("开发者指令，执行")
+        print("开发者指令，执行")
         return {"status": "ok"}
 
 
@@ -527,13 +567,13 @@ async def handle_event(request: Request):
     if not raw_msg and post_type != "message":
         if post_type == "request":
             return await handle_friend_request(data)
-        logging.debug('非正常信息，跳过')
+        print('非正常信息，跳过')
         return {"status": "ignore"}
 
 
     # 排除机器人自言自语
     if sender_id == str(config.MY_BOT_QQ):
-        logging.debug('自己的信息，跳过')
+        print('自己的信息，跳过')
         return {"status": "ignore"}
 
 
@@ -554,15 +594,15 @@ async def handle_event(request: Request):
     last_time = Global.last_handle_time.get(context_id, 0) 
     if (current_time - last_time < config.REPLY_CD) or (time.time() - data.get("time", time.time()) > 30):
         if f"[CQ:at,qq={config.MY_BOT_QQ}]" not in raw_msg:
-            logging.debug('冷却未完成，跳过')
+            print('冷却未完成，跳过')
             return {"status": "ignore"}
 
     async with Global.chat_locks[context_id]:
         try:
             # 1. 解析消息内容
             input_message = await explain_message(str(raw_msg), msg_id) 
-            logging.debug("-" * 52)
-            logging.debug(f"📥 收到并解析消息: {input_message}")
+            print("-" * 52)
+            print(f"📥 收到并解析消息: {input_message}")
 
             # 2. 获取当前状态 
             current_feeling = DM.data.get("feeling", "无") 
@@ -593,18 +633,18 @@ async def handle_event(request: Request):
                 Global.session_counts[context_id] += 1
             
             this_count = Global.session_counts[context_id]
-            logging.debug(f"📊 会话 [{context_id}] 当前长度: {this_count} (目标触发: 每 10 条)")
+            print(f"📊 会话 [{context_id}] 当前长度: {this_count}")
 
             # 触发判断：每 10 条触发一次，且历史里确实有东西
             if this_count > 0 and this_count % 50 == 0:
                 segment = history[-50:] if len(history) >= 50 else history
-                logging.info(f"🎯 [人设提取] 命中周期，开始分析 {context_id} 的信息...")
+                print(f"🎯 [人设提取] 命中周期，开始分析 {context_id} 的信息...")
                 asyncio.create_task(run_info_extraction(context_id, segment))
 
             # 队列合并与跳过处理逻辑
             # 判断自己是否是等待锁的期间，最后进来的那条消息
             if Global.latest_req_id.get(context_id) != current_req_id:
-                logging.debug(f"⏳ [{context_id}] 消息已被合并至上下文。检测到有更新的消息正在排队，跳过当前AI处理以加速响应。")
+                print(f"⏳ [{context_id}] 消息已被合并至上下文。检测到有更新的消息正在排队，跳过当前AI处理以加速响应。")
                 return {"status": "ok"}
             
 
@@ -625,7 +665,7 @@ async def handle_event(request: Request):
                 reply_json = json.loads(content_str)
 
                 if reply_json.get('should') is True:
-                    logging.debug(f"[{context_id}] Miku 决定回复")
+                    print(f"[{context_id}] Miku 决定回复")
                     
                     # 1. 获取涉及到的用户 QQ (现状：recent_messages 已获取)
                     history = DM.data["chat_contexts"].get(context_id, [])
@@ -657,7 +697,7 @@ async def handle_event(request: Request):
                     current_context = [
                         {"role": "system", "content": dynamic_system_prompt}
                     ] + history[-config.MAX_HISTORY_LIMIT:]                    
-                    # logging.info("提示词：",current_context)
+                    # print("提示词：",current_context)
                     # 1. 获取 AI 回复
                     result = await ask_AI(
                         messages=current_context, 
@@ -704,14 +744,14 @@ async def handle_event(request: Request):
 
                     new_favor = DM.add_favor(sender_id, score_change)
 
-                    logging.info(f"💖 好感度变动: {score_change} (目标QQ: {sender_id}, 当前: {new_favor})")
-                    logging.debug("-" * 52)
+                    print(f"💖 好感度变动: {score_change} (目标QQ: {sender_id}, 当前: {new_favor})")
+                    print("-" * 52)
                 else:
-                    logging.debug(f"[{context_id}]  Miku 正在围观，不打算说话。")
-                    logging.debug("-" * 52)
+                    print(f"[{context_id}]  Miku 正在围观，不打算说话。")
+                    print("-" * 52)
 
         except json.JSONDecodeError:
-            logging.warning("❌ AI 决策层返回了非法的 JSON 格式，已静默拦截。")
+            logging.warning(f"❌ AI 决策层返回了非法的 JSON 格式:{json.JSONDecodeError}")
         except Exception as e:
             # 绝对拦截，任何崩溃都不会发给QQ，只在后台打印
             logging.error(f"❌ 运行发生致命错误 (已拦截保护): {e}")
@@ -719,7 +759,7 @@ async def handle_event(request: Request):
             logging.error("❌ 发现致命错误，正在打印堆栈追踪：")
             traceback.print_exc()
         finally:
-            # 确保无论发生什么错误，CD时间都会被刷新，避免卡死或穿透漏洞
+            # 刷新CD
             Global.last_handle_time[context_id] = time.time()
 
     return {"status": "ok"}

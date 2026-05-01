@@ -47,7 +47,7 @@ async def explain_image(img_url: str, is_emoji: bool = False):
         return f"[{label}内容: {content}]"
 
     # 缓存未命中
-    logging.info(f"🔍 发现新{'表情包' if is_emoji else '图片'}，请求 AI 解析...")
+    print(f"🔍 发现新{'表情包' if is_emoji else '图片'}，请求 AI 解析...")
     
     try:
         # 这里动态传递 is_emoji 参数给 Prompt 管理类
@@ -137,7 +137,7 @@ async def explain_forward(forward_id: str, limit: int = 20):
 
 
             if not str(content).strip():
-                logging.info(f"\n👻 抓到空消息了！请查看这个 Node 到底长啥样:\n{node}\n")
+                logging.info(f"\n抓到空消息了！请查看这个 Node 到底长啥样:\n{node}\n")
 
             parsed_msgs.append(f"{nickname}: {content}")
             
