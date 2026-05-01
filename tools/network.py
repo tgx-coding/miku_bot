@@ -82,7 +82,7 @@ def send_msg(msg_type, group_id, user_id, text):
         if response.status_code == 200:
             # 记录日志时隐藏 base64 内容，节省空间
             log_text = re.sub(r'base64://[^,\]]+', 'base64://<图片数据已省略>', text)
-            print(f"🚀 消息发送成功: {log_text}")
+            logging.debug(f"🚀 消息发送成功: {log_text}")
         else:
             logging.warning(f"⚠️ 发送失败，状态码: {response.status_code} | 响应: {response.text},发送内容：{log_text}")
     except Exception as e:

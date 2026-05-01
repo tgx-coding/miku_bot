@@ -47,7 +47,7 @@ async def explain_image(img_url: str, is_emoji: bool = False):
         return f"[{label}内容: {content}]"
 
     # 缓存未命中
-    print(f"🔍 发现新{'表情包' if is_emoji else '图片'}，请求 AI 解析...")
+    logging.debug(f"🔍 发现新{'表情包' if is_emoji else '图片'}，请求 AI 解析...")
     
     try:
         # 这里动态传递 is_emoji 参数给 Prompt 管理类

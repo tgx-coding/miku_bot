@@ -256,7 +256,7 @@ async def ask_AI(messages, api_key, model_name=None):
             usage = res_data.get("usage", {})
             total_tokens = usage.get('total_tokens', 0)
             
-            print(f"📊 消耗: {total_tokens} tokens | 想法: {new_feeling}")
+            logging.debug(f"📊 消耗: {total_tokens} tokens | 想法: {new_feeling}")
             
             # 更新全局状态
             DM.update_tokens(total_tokens, model_type="output")
@@ -323,7 +323,7 @@ async def ask_silicon_smart(messages, api_key, model_name="Qwen/Qwen2.5-7B-Instr
 
             # --- 调试打印：使用 formatted_messages 避免字符串索引错误 ---
             usage = res_data.get("usage", {})
-            print(f"📊决策模型消耗: {usage.get('total_tokens')} tokens")
+            logging.debug(f"📊决策模型消耗: {usage.get('total_tokens')} tokens")
 
 
             # 统计 Token（可选）

@@ -221,7 +221,7 @@ class DataManager:
             # 打印一下调试信息
             all_t = self.data[key]["all_tokens"]
             times = self.data[key]["times"]
-            print(f"📊 [{model_type.upper()}] 更新: 本次 {total_tokens}, 总计 {all_t}, 平均 {all_t/times:.2f}")
+            logging.debug(f"📊 [{model_type.upper()}] 更新: 本次 {total_tokens}, 总计 {all_t}, 平均 {all_t/times:.2f}")
             
             # 3. 自动保存
             self.save_data()

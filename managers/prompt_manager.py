@@ -59,9 +59,9 @@ class PromptManager:
         str_emoji_list = ''
         for name in emoji_list:
             str_emoji_list += name + ","
-        # print("emoji list:",str_emoji_list)
+        # logging.debug("emoji list:",str_emoji_list)
         # felling = DM.data.get("felling","无")
-        # print("当前想法：",felling)
+        # logging.debug("当前想法：",felling)
         prompt = (
             f"{config.SPEECH_PROMPT_SETTING}"#设定
             f"{config.SPEECH_PROMPT_RULE}"#规则

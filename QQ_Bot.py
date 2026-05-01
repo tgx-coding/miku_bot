@@ -459,7 +459,7 @@ async def handle_event(request: Request):
     if not Global.running: # 关闭bot时的拦截
         return {"status": "ok"}
     
-    print('成功接收信息')
+    logging.debug('成功接收信息')
     data = await request.json()
     post_type = data.get("post_type")
     
@@ -485,9 +485,9 @@ async def handle_event(request: Request):
 
     # --- 2. 识别并重定向“戳一戳”事件 ---
     if post_type == "notice":
-        print('检测到提示信息')
+        logging.debug('检测到提示信息')
         if data.get("notice_type") == "notify" and data.get("sub_type") == "poke":
-            print('检测到戳一戳')
+            logging.debug('检测到戳一戳')
             target_id = data.get("target_id")
             # 注意：poke 事件里的发送者键名是 sender_id，不是 user_id
             real_sender_id = str(data.get("sender_id", ""))
@@ -499,7 +499,7 @@ async def handle_event(request: Request):
                 user_info = member_info.get(real_sender_id, {})
                 sender_name = user_info.get("name", f"用户({real_sender_id})")
 
-                print(f"👉 收到来自 {sender_name} 的戳一戳")
+                logging.debug(f"👉 收到来自 {sender_name} 的戳一戳")
                 
                 # 【关键点】：将 notice 事件伪装成 message 变量
                 # 这样下方的逻辑就会把它当成一条普通消息处理
@@ -508,31 +508,31 @@ async def handle_event(request: Request):
                 message_type = "group" if group_id else "private"
                 # 这里不 return，让程序继续往下走
             else:
-                print('被戳的不是自己，跳过')
+                logging.debug('被戳的不是自己，跳过')
                 return {"status": "ignore"}
         else:
-            print('其他提示信息，跳过')
+            logging.debug('其他提示信息，跳过')
             return {"status": "ignore"}
         
     # 调试模式指定群聊
     if config.DEBUG_MODE:
         if group_id != config.DEBUG_GP and message_type == "group":
-            print("非调试群聊，跳过")
+            logging.debug("非调试群聊，跳过")
             return {"status": "ok"}
 
     # 拦截黑名单的群
     if group_id in config.BLACKLIST:
-        print("黑名单内群聊，跳过")
+        logging.debug("黑名单内群聊，跳过")
         return {"status": "ok"}
     
     # 拦截ban掉的群聊
     if group_id in ban_gp:
-        print("群聊被ban，跳过")
+        logging.debug("群聊被ban，跳过")
         return {"status": "ok"}
     
     # 拦截开发者指令
     if await handle_developer_command(raw_msg, message_type, target_id, sender_id, data, group_id):
-        print("开发者指令，执行")
+        logging.debug("开发者指令，执行")
         return {"status": "ok"}
 
 
@@ -567,13 +567,13 @@ async def handle_event(request: Request):
     if not raw_msg and post_type != "message":
         if post_type == "request":
             return await handle_friend_request(data)
-        print('非正常信息，跳过')
+        logging.debug('非正常信息，跳过')
         return {"status": "ignore"}
 
 
     # 排除机器人自言自语
     if sender_id == str(config.MY_BOT_QQ):
-        print('自己的信息，跳过')
+        logging.debug('自己的信息，跳过')
         return {"status": "ignore"}
 
 
@@ -594,15 +594,15 @@ async def handle_event(request: Request):
     last_time = Global.last_handle_time.get(context_id, 0) 
     if (current_time - last_time < config.REPLY_CD) or (time.time() - data.get("time", time.time()) > 30):
         if f"[CQ:at,qq={config.MY_BOT_QQ}]" not in raw_msg:
-            print('冷却未完成，跳过')
+            logging.debug('冷却未完成，跳过')
             return {"status": "ignore"}
 
     async with Global.chat_locks[context_id]:
         try:
             # 1. 解析消息内容
             input_message = await explain_message(str(raw_msg), msg_id) 
-            print("-" * 52)
-            print(f"📥 收到并解析消息: {input_message}")
+            logging.debug("-" * 52)
+            logging.debug(f"📥 收到并解析消息: {input_message}")
 
             # 2. 获取当前状态 
             current_feeling = DM.data.get("feeling", "无") 
@@ -633,18 +633,18 @@ async def handle_event(request: Request):
                 Global.session_counts[context_id] += 1
             
             this_count = Global.session_counts[context_id]
-            print(f"📊 会话 [{context_id}] 当前长度: {this_count}")
+            logging.debug(f"📊 会话 [{context_id}] 当前长度: {this_count}")
 
             # 触发判断：每 10 条触发一次，且历史里确实有东西
             if this_count > 0 and this_count % 50 == 0:
                 segment = history[-50:] if len(history) >= 50 else history
-                print(f"🎯 [人设提取] 命中周期，开始分析 {context_id} 的信息...")
+                logging.debug(f"🎯 [人设提取] 命中周期，开始分析 {context_id} 的信息...")
                 asyncio.create_task(run_info_extraction(context_id, segment))
 
             # 队列合并与跳过处理逻辑
             # 判断自己是否是等待锁的期间，最后进来的那条消息
             if Global.latest_req_id.get(context_id) != current_req_id:
-                print(f"⏳ [{context_id}] 消息已被合并至上下文。检测到有更新的消息正在排队，跳过当前AI处理以加速响应。")
+                logging.debug(f"⏳ [{context_id}] 消息已被合并至上下文。检测到有更新的消息正在排队，跳过当前AI处理以加速响应。")
                 return {"status": "ok"}
             
 
@@ -665,7 +665,7 @@ async def handle_event(request: Request):
                 reply_json = json.loads(content_str)
 
                 if reply_json.get('should') is True:
-                    print(f"[{context_id}] Miku 决定回复")
+                    logging.debug(f"[{context_id}] Miku 决定回复")
                     
                     # 1. 获取涉及到的用户 QQ (现状：recent_messages 已获取)
                     history = DM.data["chat_contexts"].get(context_id, [])
@@ -697,7 +697,7 @@ async def handle_event(request: Request):
                     current_context = [
                         {"role": "system", "content": dynamic_system_prompt}
                     ] + history[-config.MAX_HISTORY_LIMIT:]                    
-                    # print("提示词：",current_context)
+                    # logging.debug("提示词：",current_context)
                     # 1. 获取 AI 回复
                     result = await ask_AI(
                         messages=current_context, 
@@ -744,11 +744,11 @@ async def handle_event(request: Request):
 
                     new_favor = DM.add_favor(sender_id, score_change)
 
-                    print(f"💖 好感度变动: {score_change} (目标QQ: {sender_id}, 当前: {new_favor})")
-                    print("-" * 52)
+                    logging.debug(f"💖 好感度变动: {score_change} (目标QQ: {sender_id}, 当前: {new_favor})")
+                    logging.debug("-" * 52)
                 else:
-                    print(f"[{context_id}]  Miku 正在围观，不打算说话。")
-                    print("-" * 52)
+                    logging.debug(f"[{context_id}]  Miku 正在围观，不打算说话。")
+                    logging.debug("-" * 52)
 
         except json.JSONDecodeError:
             logging.warning(f"❌ AI 决策层返回了非法的 JSON 格式:{json.JSONDecodeError}")
