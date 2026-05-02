@@ -226,6 +226,16 @@ class DataManager:
             # 3. 自动保存
             self.save_data()
 
+    def recount_tokens (self, model_type: str):
+        key = f"{model_type}_token_count"
+        if key not in self.data:
+            self.data[key] = {"all_tokens": 0, "times": 0}
+
+        self.data[key]["all_tokens"] = 0
+        self.data[key]["times"] = 0
+        
+        logging.debug(f"📊 [{model_type.upper()}] 已清空总 {model_type} token消耗")
+
     def clean_old_cache(self, max_days=7):
         """清理过期缓存，并自动剔除不符合新字典格式的旧数据"""
         current_time = time.time()
@@ -324,4 +334,7 @@ class DataManager:
             archive_parts.append(f"ID({qq}):{info}")
         
         return "\n".join(status_rows), "\n".join(archive_parts)
+    
+        
+
 DM = DataManager()

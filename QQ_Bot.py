@@ -188,6 +188,7 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
     try:
         # --- 1. 开发者 (MASTER) 独占指令 ---
         if is_admin(event) or str(sender_id) == str(config.DEVELOPING_NUMBER):
+
             if str(sender_id) == str(config.DEVELOPING_NUMBER):
                 if "关闭bot" in raw_msg:
                     send_msg(message_type, target_id, sender_id, "主人让我睡觉了喵，拜拜~")
@@ -209,6 +210,20 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
                         logging.error(f"刷新表情包失败\n{e}")
                     return True
                 
+                if any(k in raw_msg for k in ["清空token数据", "清空token", "重制token数据","重制token"]):
+                    try:
+                        if any(k in raw_msg for k in ["output", "输出"]):
+                            DM.recount_tokens('output') 
+                        if any(k in raw_msg for k in ['decision', "决策"]):
+                            DM.recount_tokens('decision') 
+                            
+                        send_msg(message_type, target_id, sender_id, "猫全部忘光了喵")
+
+                        logging.debug("已重制数据")
+                    except Exception as e:
+                        send_msg(message_type, target_id, sender_id, "猫忘不掉呜呜呜......")
+                        logging.error("重制数据失败")
+
                 # 开发者查询 Token 消耗
                 if any(k in raw_msg for k in ["token", "tk", "余额"]):
                     logging.debug("进入查询")
@@ -259,7 +274,10 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
                         daily = daily_data.get(gid_str, 0)
                         total = total_data.get(gid_str, 0)
                         o_stats = DM.data.get("output_token_count", {"all_tokens": 0, "times": 0})
-                        o_avg = o_stats["all_tokens"] / o_stats["times"]
+                        if o_stats["times"] != 0:
+                            o_avg = o_stats["all_tokens"] / o_stats["times"]
+                        else:
+                            o_avg = 0
                         late_time = (config.GROUP_TOKEN_LIMIT - daily) / o_avg # 剩余对话
 
                         msg =  f"当前群聊 Token 统计 ({gid_str})：\n"
@@ -284,48 +302,9 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
                 if group_id  in ban_gp:
                     ban_gp.remove(group_id)  
                 return True  
-            # if any(k in raw_msg for k in ["清空token数据", "清空token", "重制token数据","重制token"]):
+            
                 
 
-        # --- 2. 群管理员权限指令 (非开发者也能用) ---
-        if is_admin(event):
-            
-            if any(k in raw_msg for k in ["禁言bot", "禁言BOT", "禁言Bot"]): # 管理员让 Bot 闭嘴
-                if group_id not in ban_gp:
-                    ban_gp.append(group_id)
-                return True
-            if any(k in raw_msg for k in ["解禁bot", "解禁BOT", "解禁Bot"]): 
-                if group_id  in ban_gp:
-                    ban_gp.remove(group_id)   
-                return True 
-            if any(k in raw_msg for k in ["额度查询", "token查询", "查询token", "查询额度"]):
-                try:
-                    total_data = DM.data.get("total_group_usage", {})
-                    daily_data = DM.data.get("group_token_usage", {})
-                    
-                    # 将 group_id 转为字符串，确保能匹配上字典里的 key
-                    gid_str = str(group_id) 
-                    
-                    # 直接获取当前群的数据，如果没有则默认为 0
-                    daily = daily_data.get(gid_str, 0)
-                    total = total_data.get(gid_str, 0)
-                    o_stats = DM.data.get("output_token_count", {"all_tokens": 0, "times": 0})
-                    o_avg = o_stats["all_tokens"] / o_stats["times"]
-                    late_time = (config.GROUP_TOKEN_LIMIT - daily) / o_avg # 剩余对话
-
-                    msg =  f"当前群聊 Token 统计 ({gid_str})：\n"
-                    msg += f"   今日消耗: {daily}\n"
-                    msg += f"   累计消耗: {total}\n"
-                    msg += f"   今日剩余token: {max(config.GROUP_TOKEN_LIMIT - daily, 0)}\n"
-                    if late_time > 0.0 :
-                        msg += f"   (约剩余:{late_time:.0f} 次对话)"
-                    else:
-                        msg += f"   (今日对话次数已用完)"
-                    send_msg(message_type, target_id, sender_id, msg)
-                except Exception as e :
-                    send_msg(message_type, target_id, sender_id, "猫找不到喵......")
-                    logging.error(f"查询群token失败{e}")
-                return True 
 
 
     except Exception as e:
@@ -542,9 +521,9 @@ async def handle_event(request: Request):
     if message_type == "group":
         gid_str = str(group_id)
         used_tokens = DM.data.get("group_token_usage", {}).get(gid_str, 0)
-        if used_tokens >= config.GROUP_TOKEN_LIMIT and str(sender_id) != str(config.DEVELOPING_NUMBER):
-            if f"[CQ:at,qq={config.MY_BOT_QQ}]" in raw_msg:
-                pass
+        if used_tokens >= config.GROUP_TOKEN_LIMIT :
+            # if f"[CQ:at,qq={config.MY_BOT_QQ}]" in raw_msg:
+            #     pass
             log_info_throttled(
                 key=f"token_limit_{gid_str}",
                 interval_sec=1800,
