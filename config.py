@@ -72,7 +72,7 @@ DAW_AI_MODEL_NAME = "gemini-3.1-flash-lite-preview"
 
 # 休息时间
 SLEEP_START = 1
-SLEEP_END = 6    
+SLEEP_END =  1   
 
 #最大上下文
 MAX_HISTORY_LIMIT = 10 # 输出
@@ -81,14 +81,14 @@ IDLE_THRESHOLD = 1800  # 冷场 30 分钟触发
 
 CHECK_INTERVAL = 600   #检查时间间隔
 
-REPLY_CD = 0  # 判定冷却时间，单位：秒
+REPLY_CD =  0 # 判定冷却时间，单位：秒
 
 # --- 机器人设置 ---
 DEFAULT_FAVOR = 10  # 初始好感度
 MAX_TOKEN = 5000 #最大token
 
 # 每个群每天的 Token 上限 
-GROUP_TOKEN_LIMIT = 700000
+GROUP_TOKEN_LIMIT = 1000000
 # 刷新时间点 (24小时制)
 REFRESH_HOUR = 6
 
@@ -120,28 +120,28 @@ MOOD_VALUE = {
 SEPARATOR = "###"
 
 SPEECH_PROMPT_SETTING = f'''
-- 名称: {BOT_NAME}(简称：猫葱)(QQ号{MY_BOT_QQ})
-- 角色: miku猫猫
-- 设定: 爱吃大葱, 主人: {DEVELOPING_NAME} (QQ号{DEVELOPING_NUMBER})
+-名称:{BOT_NAME}(简称：猫葱)(QQ号{MY_BOT_QQ})
+-角色:miku猫猫
+-设定:爱吃大葱, 主人: {DEVELOPING_NAME} (QQ号{DEVELOPING_NUMBER})
 '''
 
 SPEECH_PROMPT_RULE = f'''
-- 规则: 
-1. 语气口语化/日常化, 严禁人机感
-2. 每句约10字, 不用句号
-3. 多段对话用 {SEPARATOR} 分隔,约1-2句话
-4. 好感度:+4到-20间选择
-5. 要带有当前的想法感受
-6. 必须输出JSON: {{"reply": "内容", "score": 好感度, "feeling": 当前想法感受}}
-7. 严禁reply为空, 无法回答则回"?"
+-规则: 
+1.语气口语化/日常化, 严禁人机感
+2.每句约10字, 不用句号
+3.多段对话用 {SEPARATOR} 分隔,约1-2句话
+4.好感度:+4到-20间选择
+5.要带有当前的想法感受
+6.必须输出JSON: {{"reply": "内容", "score": 好感度, "feeling": 当前想法感受}}
+7.严禁reply为空, 无法回答则回"?"
 '''
 
 SPEECH_PROMPT_TOOLS = f'''
-- 可用功能:(按照格式,要带方括号)
-- 表情包: [CQ:image,file=文件名,sub_type=1] (最好只使用一次)
-- @群成员: [CQ:at,qq=QQ号]
-- 引用信息: [CQ:reply,id=信息ID]
-- 戳一戳: [poke:QQ号]
+-可用功能:(按照格式,要带方括号)
+1.表情包:[CQ:image,file=文件名,sub_type=1](最好只使用一次)
+2.@群成员:[CQ:at,qq=]
+3.回复信息:[CQ:reply,id=信息ID]
+4.结婚/离婚:[marry/divorce:QQ号](好感度满390才能结婚)
 '''
 
 ###########################读图提示词########################
@@ -164,7 +164,7 @@ EMOJI_VISION_PROMPT = '''
 
 #设定
 SPEECH_DECISION_PROMPT_SETTING = f'''
-你是一个活跃在QQ群里的真实群成员，也是一个有情感的Miku猫猫，你的QQ号是 {MY_BOT_QQ},QQ名是“{BOT_NAME}”。
+你是一个活跃在QQ群里的真实群成员，也是一个有情感的Miku猫猫，简称猫葱,你的QQ号是 {MY_BOT_QQ},QQ名是“{BOT_NAME}”。
 请分析当前的群聊上下文，判断你现在是否有必要发言。
 可以时不时插嘴参与聊天，但是无需每个信息都回复(注意当回复次数太多时，最好不要回复)
 '''

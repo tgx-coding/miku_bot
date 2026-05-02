@@ -277,7 +277,7 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
                         if o_stats["times"] != 0:
                             o_avg = o_stats["all_tokens"] / o_stats["times"]
                         else:
-                            o_avg = 0
+                            o_avg = 1000
                         late_time = (config.GROUP_TOKEN_LIMIT - daily) / o_avg # 剩余对话
 
                         msg =  f"当前群聊 Token 统计 ({gid_str})：\n"
@@ -325,23 +325,38 @@ async def process_and_send_ai_reply(reply_list, message_type, target_id, sender_
             clean_part = part.strip()
             if not clean_part: continue
 
-           # ---- 核心修改：支持 [poke] 和 [poke:123456] ----
-            # 使用正则匹配这两种情况
-            poke_match = re.search(r'\[poke(?::(\d+))?\]', clean_part)
-            if poke_match:
-                if message_type == "group":
-                    from tools.network import send_poke
-                    
-                    # 逻辑：如果 AI 写了 QQ 号就戳那个号，没写就戳当前说话的人
-                    target_user = poke_match.group(1) if poke_match.group(1) else sender_id
-                    
-                    await send_poke(group_id=target_id, user_id=target_user)
+           # ---- 结婚逻辑处理 ----
+            marry_match = re.search(r'\[marry(?::(\d+))?\]', clean_part)
+            if marry_match:
+                # 确定目标：标签里的QQ 或 当前发送者
+                target_qq = marry_match.group(1) if marry_match.group(1) else sender_id
                 
-                # 清理掉所有的 poke 标记
-                clean_part = re.sub(r'\[poke(?::\d+)?\]', '', clean_part).strip()
-                if not clean_part:
-                    continue
-            # --------------------------------------------
+                # 获取当前好感度 (假设你有获取好感度的函数 get_favor)
+                current_favor = DM.get_favor(target_qq) 
+                
+                if current_favor >= 390:
+                    if DM.marry(target_qq):
+                        logging.info(f"❤️ 恭喜！猫葱与 {target_qq} 结婚了！")
+                    # 可以在这里额外触发一个特殊的结婚特效消息
+                else:
+                    logging.warning(f"💔 好感度不足({current_favor}/390)，结婚动作被拦截")
+
+                # 清理掉所有的 marry 标记继续处理文字
+                clean_part = re.sub(r'\[marry(?::\d+)?\]', '', clean_part).strip()
+
+            # ---- 离婚逻辑处理 ----
+            divorce_match = re.search(r'\[divorce(?::(\d+))?\]', clean_part)
+            if divorce_match:
+                target_qq = divorce_match.group(1) if divorce_match.group(1) else sender_id
+                if DM.divorce(target_qq):
+                    logging.info(f"☁️ {target_qq} 与猫葱离婚了...")
+                
+                clean_part = re.sub(r'\[divorce(?::\d+)?\]', '', clean_part).strip()
+
+            if not clean_part:
+                continue
+
+            
 
             # 2. 处理图片 CQ 码路径
             if "[CQ:image" in clean_part:
@@ -466,13 +481,19 @@ async def handle_event(request: Request):
     if post_type == "notice":
         logging.debug('检测到提示信息')
         if data.get("notice_type") == "notify" and data.get("sub_type") == "poke":
-            logging.debug('检测到戳一戳')
-            target_id = data.get("target_id")
-            # 注意：poke 事件里的发送者键名是 sender_id，不是 user_id
-            real_sender_id = str(data.get("sender_id", ""))
-
+            logging.debug('检测 to 戳一戳')
+            
+            # 【关键修改】：不要覆盖 target_id，改用 poked_id 检查被戳的是谁
+            poked_id = data.get("target_id")
+            group_id = data.get("group_id") # 确保获取到群号
+            
+            real_sender_id = str(data.get("user_id") or data.get("sender_id", ""))
+            
+            logging.debug(f"real_sender_id:{real_sender_id}")
+            logging.debug(f"poked_id:{poked_id}") # 调试信息也改一下
+            
             # 如果被戳的是机器人自己
-            if str(target_id) == str(config.MY_BOT_QQ):
+            if str(poked_id) == str(config.MY_BOT_QQ):
                 from tools.network import get_group_member_dict
                 member_info = get_group_member_dict(group_id) if group_id else {}
                 user_info = member_info.get(real_sender_id, {})
@@ -480,12 +501,18 @@ async def handle_event(request: Request):
 
                 logging.debug(f"👉 收到来自 {sender_name} 的戳一戳")
                 
-                # 【关键点】：将 notice 事件伪装成 message 变量
-                # 这样下方的逻辑就会把它当成一条普通消息处理
                 raw_msg = f"[系统提示：{sender_name} (QQ:{real_sender_id}) 刚才戳了戳你]"
                 sender_id = real_sender_id
-                message_type = "group" if group_id else "private"
-                # 这里不 return，让程序继续往下走
+                
+                # 【关键修复点】：明确设置回复的目标和类型
+                if group_id:
+                    message_type = "group"
+                    target_id = group_id  # 确保 target_id 是群号，而不是机器人QQ
+                else:
+                    message_type = "private"
+                    target_id = sender_id
+                
+                msg_id = None 
             else:
                 logging.debug('被戳的不是自己，跳过')
                 return {"status": "ignore"}
@@ -663,7 +690,6 @@ async def handle_event(request: Request):
                     # 2. 获取并格式化状态（交给 DM 处理，不要在 main.py 里拼字符串）
                     # 假设你在 DM 中写一个 get_compact_status 方法
                     status_table, archive_text = DM.get_compact_status_and_archive(involved_qqs)
-
                     # 3. 组装动态 System Prompt（完全交给 PM）
                     dynamic_system_prompt = PM.build_chat_system_prompt(
                         feeling=current_feeling, 
@@ -676,7 +702,7 @@ async def handle_event(request: Request):
                     current_context = [
                         {"role": "system", "content": dynamic_system_prompt}
                     ] + history[-config.MAX_HISTORY_LIMIT:]                    
-                    # logging.debug("提示词：",current_context)
+                    logging.debug(f"提示词：{current_context}")
                     # 1. 获取 AI 回复
                     result = await ask_AI(
                         messages=current_context, 

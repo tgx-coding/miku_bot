@@ -98,23 +98,33 @@ class PromptManager:
             f"{history_text}\n\n"
         )
         return prompt
-    
+
     @staticmethod
-    def build_status_table(involved_users_data):
+    def build_status_table(involved_users_data, marry_list=None):
         """
         生成活跃成员状态表
         involved_users_data 格式: { "QQ号": {"name": "名称", "favor": 100, "mood": "情绪"} }
+        marry_list 格式: ["QQ号1", "QQ号2"]
         """
         if not involved_users_data:
             return ""
         
-        header = "\n[活跃成员状态: 用户|名称|好感|情绪]\n"
+        # 确保 marry_list 是列表，防止 None 报错
+        if marry_list is None:
+            marry_list = []
+        
+        header = "\n[活跃成员状态: 用户|名称|身份|好感|情绪]\n"
         rows = []
         for qq, info in involved_users_data.items():
             name = info.get("name", "未知")
             favor = info.get("favor", 0)
             mood = info.get("mood", "稳定")
-            rows.append(f"[{qq}|{name}|{favor}|{mood}]")
+            
+            # 如果该 QQ 在结婚名单里，标记为“情侣”，否则为空
+            identity = "情侣" if str(qq) in marry_list else "成员"
+            
+            # 将身份加入表格行中
+            rows.append(f"[{qq}|{name}|{identity}|{favor}|{mood}]")
         
         return header + "\n".join(rows)
 # 实例化一个单例供外部直接调用
