@@ -20,7 +20,9 @@ class DataManager:
             "feeling" : "无",
             "image_cache": {},
             "chat_contexts" : {},
-            "user_infor" : {}
+            "user_infor" : {},
+            "marry_list" : []
+
         }
         self.data = self.start_data.copy() # 初始化内存数据
         self.load_data()
@@ -233,8 +235,10 @@ class DataManager:
 
         self.data[key]["all_tokens"] = 0
         self.data[key]["times"] = 0
-        
+
+        self.save_data()
         logging.debug(f"📊 [{model_type.upper()}] 已清空总 {model_type} token消耗")
+
 
     def clean_old_cache(self, max_days=7):
         """清理过期缓存，并自动剔除不符合新字典格式的旧数据"""
@@ -311,30 +315,69 @@ class DataManager:
                 self.data["user_infor"][uid_str].append(info)
         self.save_data()
 
-    def get_compact_status_and_archive(self, qqs):
+    def get_compact_status_and_archive(self, qqs):  
+        """
+        在 DM 内部组装成员状态表与档案，增加【身份】标识
+        """
         status_rows = []
         archive_parts = []
+        
+        # 1. 获取结婚名单 (确保是列表且元素为字符串)
+        marry_list = [str(q) for q in self.data.get("marry_list", [])]
+        
         for qq in qqs:
-            # 1. 获取好感度等实时数据
-            level = self.get_level_data(qq)
+            qq_str = str(qq)
             
-            # --- 核心修复：增加类型校验 ---
-            # 如果 level 是元组、列表或 None，强行转为默认字典，防止 .get() 崩溃
+            # 2. 获取好感度等实时数据
+            level = self.get_level_data(qq_str)
+            
+            # 类型校验：防止 level 数据异常导致崩溃
             if not isinstance(level, dict):
-                logging.warning(f"⚠️ 警告: QQ {qq} 的数据格式错误(类型:{type(level)})，已自动重置显示。")
+                logging.warning(f"⚠️ 警告: QQ {qq_str} 数据格式错误，已重置显示。")
                 level = {'name': '未知', 'favor': 0, 'mood': '稳定'}
-            # ----------------------------
 
-            # 极致压缩格式: [QQ|名|好感|情绪]
-            # 现在 level 保证是字典了，调用 .get() 绝对安全
-            status_rows.append(f"[{qq}|{level.get('name','未知')}|{level.get('favor',0)}|{level.get('mood','稳定')}]")
+            # --- 核心逻辑：判断身份 ---
+            # 如果在结婚名单里，身份就是“情侣”，否则是“成员”
+            identity = "情侣" if qq_str in marry_list else "成员"
+
+            # 3. 组装极致压缩格式: [QQ|名|身份|好感|情绪]
+            name = level.get('name', '未知')
+            favor = level.get('favor', 0)
+            mood = level.get('mood', '稳定')
             
-            # 2. 获取档案
-            info = self.data.get("user_infor", {}).get(qq, "新面孔")
-            archive_parts.append(f"ID({qq}):{info}")
+            status_rows.append(f"[{qq_str}|{name}|{identity}|{favor}|{mood}]")
+            
+            # 4. 获取档案
+            info = self.data.get("user_infor", {}).get(qq_str, "新面孔")
+            archive_parts.append(f"ID({qq_str}):{info}")
         
-        return "\n".join(status_rows), "\n".join(archive_parts)
+        # 组装带标题的最终文本，方便 AI 直接阅读
+        status_table = "[活跃成员状态: QQ|名称|身份|好感|情绪]\n" + "\n".join(status_rows)
+        archive_section = "[成员档案库]\n" + "\n".join(archive_parts)
+        
+        return status_table, archive_section
     
+    def marry(self, qq: str):
+        """处理结婚逻辑"""
+        if "marry_list" not in self.data:
+            self.data["marry_list"] = []
         
+        if qq not in self.data["marry_list"]:
+            self.data["marry_list"].append(str(qq))
+            self.save_data() # 记得加括号执行
+            return True
+        return False
+
+    def divorce(self, qq: str):
+        """处理离婚逻辑"""
+        if "marry_list" in self.data and str(qq) in self.data["marry_list"]:
+            self.data["marry_list"].remove(str(qq))
+            self.save_data()
+            return True
+        return False
+
+    def is_married(self, qq: str):
+        """查询是否已婚"""
+        return str(qq) in self.data.get("marry_list", [])
 
 DM = DataManager()

@@ -4,7 +4,7 @@ import re
 import logging
 import base64
 import config
-
+from datetime import datetime, timedelta, timezone
 
 # 这里的 API 地址可以从 main.py 传进来，或者直接写死
 
@@ -161,29 +161,21 @@ async def get_forward_msg(res_id):
         logging.error(f"❌ 获取合并转发失败: {e}")
     return []
 
-async def send_poke(group_id, user_id):
-    """
-    【发送戳一戳】
-    调用 NapCat API 对指定群成员执行戳一戳动作
-    """
-    # 优先使用配置文件的接口地址，如果没有则使用脚本内的 NAPCAT_API
-    base_url = getattr(config, 'NAPCAT_API', config.NAPCAT_API)
-    target_url = f"{base_url}/send_group_poke"
-    
-    payload = {
-        "group_id": group_id,
-        "user_id": user_id
-    }
-    
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(target_url, json=payload, timeout=10)
-            if response.status_code == 200:
-                logging.info(f"👉 已成功回戳用户: {user_id}")
-                return True
-            else:
-                logging.warning(f"⚠️ 戳一戳失败，响应: {response.text}")
-        except Exception as e:
-            logging.error(f"❌ 戳一戳接口异常: {e}")
-    return False
+def get_bj_time():
+    return datetime.now(timezone(timedelta(hours=8)))
 
+def send_emoji_reaction(message_id, emoji_id="124"):
+    """
+    在指定消息下回复系统表情
+    emoji_id 示例: 124(奶茶), 66(大拇指), 128(心动)
+    """
+    url = f"{config.NAPCAT_API}/set_msg_emoji_like"
+    payload = {
+        "message_id": message_id,
+        "emoji_id": str(emoji_id)
+    }
+    try:
+        response = requests.post(url, json=payload, timeout=5)
+        return response.json()
+    except Exception as e:
+        logging.error(f"❌ 设置表情回应失败: {e}")

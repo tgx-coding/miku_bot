@@ -51,7 +51,7 @@ class PromptManager:
         return full_prompt
 
     @staticmethod
-    def build_chat_system_prompt(emoji_list: list, feeling: str = "无", involved_users_info: str = "",status_table :str= '') -> str:       
+    def build_chat_system_prompt(emoji_list: list, feeling: str = "无", involved_users_info: str = "",status_table :str= '',message_type="group") -> str:       
         """
         合成输出层（聊天层）的 System Prompt
         包含核心设定、规则、可用工具以及当前加载的表情包
@@ -59,6 +59,11 @@ class PromptManager:
         str_emoji_list = ''
         for name in emoji_list:
             str_emoji_list += name + ","
+
+        qq_emoji_list = ''
+        for key in config.REACTION_EMOJI_DICT:
+            qq_emoji_list += key + ":" + config.REACTION_EMOJI_DICT[key] + ","
+        # print(qq_emoji_list)
         # logging.debug("emoji list:",str_emoji_list)
         # felling = DM.data.get("felling","无")
         # logging.debug("当前想法：",felling)
@@ -70,8 +75,10 @@ class PromptManager:
             f"{status_table}" # 插入状态表
             # f"最近对话成员的档案"
             # f"{involved_users_info if involved_users_info else '暂无详细档案'}"
-            f"- 表情包列表：{str_emoji_list}"
+            f"- 表情包列表:{str_emoji_list}"
         )
+        if message_type == "group":
+            prompt += f"- emojiID列表:{qq_emoji_list}"
         return prompt
 
     @staticmethod
@@ -98,23 +105,33 @@ class PromptManager:
             f"{history_text}\n\n"
         )
         return prompt
-    
+
     @staticmethod
-    def build_status_table(involved_users_data):
+    def build_status_table(involved_users_data, marry_list=None):
         """
         生成活跃成员状态表
         involved_users_data 格式: { "QQ号": {"name": "名称", "favor": 100, "mood": "情绪"} }
+        marry_list 格式: ["QQ号1", "QQ号2"]
         """
         if not involved_users_data:
             return ""
         
-        header = "\n[活跃成员状态: 用户|名称|好感|情绪]\n"
+        # 确保 marry_list 是列表，防止 None 报错
+        if marry_list is None:
+            marry_list = []
+        
+        header = "\n[活跃成员状态: 用户|名称|身份|好感|情绪]\n"
         rows = []
         for qq, info in involved_users_data.items():
             name = info.get("name", "未知")
             favor = info.get("favor", 0)
             mood = info.get("mood", "稳定")
-            rows.append(f"[{qq}|{name}|{favor}|{mood}]")
+            
+            # 如果该 QQ 在结婚名单里，标记为“情侣”，否则为空
+            identity = "情侣" if str(qq) in marry_list else "成员"
+            
+            # 将身份加入表格行中
+            rows.append(f"[{qq}|{name}|{identity}|{favor}|{mood}]")
         
         return header + "\n".join(rows)
 # 实例化一个单例供外部直接调用
