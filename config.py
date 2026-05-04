@@ -3,30 +3,70 @@ import logging
 import os
 import time
 from dotenv import load_dotenv
+from datetime import timedelta, timezone, datetime
 # 加载 .env 文件中的变量
 load_dotenv()
 
-# 默认使用东八区，支持通过环境变量 TZ 覆盖。
-TIMEZONE = os.getenv("TZ", "Asia/Shanghai")
-os.environ["TZ"] = TIMEZONE
-if hasattr(time, "tzset"):
-    time.tzset()
+# # --- 时区矫正逻辑 ---
+# def beijing_time_converter(*args):
+#     """将日志时间强制转换为北京时间 (UTC+8)"""
+#     # 核心逻辑：获取 UTC 时间并增加 8 小时
+#     from datetime import timedelta, timezone
+#     utc_dt = datetime.utcnow().replace(tzinfo=timezone.utc)
+#     bj_dt = utc_dt.astimezone(timezone(timedelta(hours=8)))
+#     return bj_dt.timetuple()
 
+# # 强制 logging 使用我们的转换器
+# logging.Formatter.converter = beijing_time_converter
+
+
+# --- 跨平台北京时间转换器 ---
+def bj_time_converter(*args):
+    """
+    无论系统时区如何设置，强制返回东八区时间。
+    适用于 Windows (无 tzset) 和 Linux。
+    """
+    # 构造北京时间偏移量 (UTC+8)
+    bj_tz = timezone(timedelta(hours=8))
+    # 获取带时区的当前时间
+    return datetime.now(bj_tz).timetuple()
+
+# 核心：将自定义转换器绑定到 logging 模块
+logging.Formatter.converter = bj_time_converter
+
+# --- 原有路径与环境变量逻辑 ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "bot.log")
 os.makedirs(LOG_DIR, exist_ok=True)
 
-# 日志级别: DEBUG_LOG=true 时启用 DEBUG，否则可通过 LOG_LEVEL 自定义
+# 仍然保留环境变量支持，方便 Linux 用户或 Docker 用户
+TIMEZONE = os.getenv("TZ", "Asia/Shanghai")
+os.environ["TZ"] = TIMEZONE
+if hasattr(time, "tzset"):
+    try:
+        time.tzset()
+    except Exception:
+        pass
+
+# 日志级别处理
 _log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
 if os.getenv("DEBUG_LOG", "").lower() == "true":
     _log_level_str = "DEBUG"
+
+# 最终初始化
 logging.basicConfig(
     level=getattr(logging, _log_level_str, logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[logging.FileHandler(LOG_FILE, encoding="utf-8")],
+    handlers=[
+        logging.FileHandler(LOG_FILE, encoding="utf-8"),
+        logging.StreamHandler() # 同时输出到控制台，方便调试
+    ],
+    datefmt="%Y-%m-%d %H:%M:%S",
     force=True,
 )
+
+logger = logging.getLogger("root")
 
 # Third-party loggers can be very chatty under webhook traffic; keep only warnings.
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
@@ -72,7 +112,7 @@ DAW_AI_MODEL_NAME = "gemini-3.1-flash-lite-preview"
 
 # 休息时间
 SLEEP_START = 1
-SLEEP_END =  1   
+SLEEP_END =  6
 
 #最大上下文
 MAX_HISTORY_LIMIT = 10 # 输出
@@ -141,8 +181,20 @@ SPEECH_PROMPT_TOOLS = f'''
 1.表情包:[CQ:image,file=文件名,sub_type=1](最好只使用一次)
 2.@群成员:[CQ:at,qq=]
 3.回复信息:[CQ:reply,id=信息ID]
-4.结婚/离婚:[marry/divorce:QQ号](好感度满390才能结婚)
+4.表情回应:[reaction:emoji_ID](用于在对方消息下贴小表情,多用)
+5.结婚/离婚:[marry/divorce:QQ号](好感度满390才能结婚)
 '''
+
+# 提供给提示词的表情 ID 参考字典（塞进 Prompt 里让 AI 知道能用哪些）
+REACTION_EMOJI_DICT = {
+    "9": "哭",
+    "66": "❤",
+    "76": "👍",
+    "10068": "？",
+    "128166": "💦",
+    "124": "🆗",
+    "339": "美味"
+}
 
 ###########################读图提示词########################
 

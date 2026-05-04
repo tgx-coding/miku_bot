@@ -51,7 +51,7 @@ class PromptManager:
         return full_prompt
 
     @staticmethod
-    def build_chat_system_prompt(emoji_list: list, feeling: str = "无", involved_users_info: str = "",status_table :str= '') -> str:       
+    def build_chat_system_prompt(emoji_list: list, feeling: str = "无", involved_users_info: str = "",status_table :str= '',message_type="group") -> str:       
         """
         合成输出层（聊天层）的 System Prompt
         包含核心设定、规则、可用工具以及当前加载的表情包
@@ -59,6 +59,11 @@ class PromptManager:
         str_emoji_list = ''
         for name in emoji_list:
             str_emoji_list += name + ","
+
+        qq_emoji_list = ''
+        for key in config.REACTION_EMOJI_DICT:
+            qq_emoji_list += key + ":" + config.REACTION_EMOJI_DICT[key] + ","
+        # print(qq_emoji_list)
         # logging.debug("emoji list:",str_emoji_list)
         # felling = DM.data.get("felling","无")
         # logging.debug("当前想法：",felling)
@@ -70,8 +75,10 @@ class PromptManager:
             f"{status_table}" # 插入状态表
             # f"最近对话成员的档案"
             # f"{involved_users_info if involved_users_info else '暂无详细档案'}"
-            f"- 表情包列表：{str_emoji_list}"
+            f"- 表情包列表:{str_emoji_list}"
         )
+        if message_type == "group":
+            prompt += f"- emojiID列表:{qq_emoji_list}"
         return prompt
 
     @staticmethod

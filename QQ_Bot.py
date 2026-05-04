@@ -19,7 +19,7 @@ import Global
 from managers.data_manager import DM
 from managers.prompt_manager import PM
 from tools.ai import ask_deepseek_smart, get_balance, ask_AI, get_silicon_balance, ask_silicon_smart
-from tools.network import send_msg, approve_friend_request
+from tools.network import send_msg, approve_friend_request,get_bj_time,send_emoji_reaction
 from tools.processor import explain_message
 
 # --- 初始化存档 ---
@@ -177,7 +177,7 @@ def is_owner(event: dict) -> bool:
     """
     return event.get("sender", {}).get("role") == "owner"
 
-async def handle_developer_command(raw_msg, message_type, target_id, sender_id, event, group_id):
+async def handle_developer_command(raw_msg, message_type, target_id, sender_id, event, group_id,message_id):
     """处理开发者及管理员特殊指令，返回 True 代表拦截，False 代表继续走 AI 对话"""
     global emoji_list
     
@@ -210,6 +210,10 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
                         logging.error(f"刷新表情包失败\n{e}")
                     return True
                 
+                # if "emoji_reply_message_test" in raw_msg:
+                #     send_emoji_reaction(message_id= message_id,emoji_id="66")
+                #     # return True
+
                 if any(k in raw_msg for k in ["清空token数据", "清空token", "重制token数据","重制token"]):
                     try:
                         if any(k in raw_msg for k in ["output", "输出"]):
@@ -285,7 +289,7 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
                         msg += f"   累计消耗: {total}\n"
                         msg += f"   今日剩余token: {max(config.GROUP_TOKEN_LIMIT - daily, 0)}\n"
                         if late_time > 0.0 :
-                            msg += f"   (约剩余:{late_time:.0f} 次对话)"
+                            msg += f"   (约剩余 {late_time:.0f} 次对话)"
                         else:
                             msg += f"   (今日对话次数已用完)"
                         send_msg(message_type, target_id, sender_id, msg)
@@ -314,8 +318,8 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
 
     return False
 
-async def process_and_send_ai_reply(reply_list, message_type, target_id, sender_id):
-    """处理并拆分AI输出文本与图片，安全发送，并支持 [poke] 动作"""
+async def process_and_send_ai_reply(reply_list, message_type, target_id, sender_id, msg_id=None):
+    """处理并拆分AI输出文本与图片，安全发送，并支持动作、结婚、表情回应"""
     for original_text in reply_list:
         if not original_text.strip(): continue
         
@@ -325,7 +329,7 @@ async def process_and_send_ai_reply(reply_list, message_type, target_id, sender_
             clean_part = part.strip()
             if not clean_part: continue
 
-           # ---- 结婚逻辑处理 ----
+            # ---- 结婚逻辑处理 ----
             marry_match = re.search(r'\[marry(?::(\d+))?\]', clean_part)
             if marry_match:
                 # 确定目标：标签里的QQ 或 当前发送者
@@ -349,14 +353,26 @@ async def process_and_send_ai_reply(reply_list, message_type, target_id, sender_
             if divorce_match:
                 target_qq = divorce_match.group(1) if divorce_match.group(1) else sender_id
                 if DM.divorce(target_qq):
-                    logging.info(f"☁️ {target_qq} 与猫葱离婚了...")
+                    logging.info(f"💔 {target_qq} 与猫葱离婚了...")
                 
                 clean_part = re.sub(r'\[divorce(?::\d+)?\]', '', clean_part).strip()
 
+            # ---- 表情回应逻辑处理  ----
+            reaction_match = re.search(r'\[reaction:(\d+)\]', clean_part)
+            if reaction_match:
+                emoji_id = reaction_match.group(1)
+                if msg_id:
+                    # 调用之前写好的 send_emoji_reaction 函数
+                    send_emoji_reaction(msg_id, emoji_id)
+                    logging.info(f"✨ 猫葱对消息 {msg_id} 作出了表情回应: {emoji_id}")
+                else:
+                    logging.warning("⚠️ AI 尝试表情回应，但函数未接收到 msg_id 参数！")
+                
+                # 清除标记
+                clean_part = re.sub(r'\[reaction:\d+\]', '', clean_part).strip()
+
             if not clean_part:
                 continue
-
-            
 
             # 2. 处理图片 CQ 码路径
             if "[CQ:image" in clean_part:
@@ -454,6 +470,7 @@ async def handle_event(request: Request):
         return {"status": "ok"}
     
     logging.debug('成功接收信息')
+    
     data = await request.json()
     post_type = data.get("post_type")
     
@@ -465,12 +482,18 @@ async def handle_event(request: Request):
     message_type = data.get("message_type") # "group" 或 "private"
     target_id = group_id if message_type == "group" else None
     current_time = time.time()
-    
+    # logging.debug(f"msg_id:{msg_id}")
     context_id = f"private_{sender_id}" if message_type == "private" else str(group_id)
     
-    current_hour = datetime.now().hour
+    current_hour = get_bj_time().hour
+    # logging.debug(current_hour)
     is_sleep_time = (config.SLEEP_START <= current_hour < config.SLEEP_END)
-
+    # if data.get("post_type") == "notice":
+    #     logging.debug("\n" + "="*30)
+    #     logging.debug("🔔 捕获到通知事件！")
+    #     # 打印完整的 JSON 结构，方便你观察
+    #     logging.debug(json.dumps(data, indent=4, ensure_ascii=False))
+    #     logging.debug("="*30 + "\n")
     # 如果是消息类型，提取数据（如果是 notice 伪装过来的，这段会被跳过）
     if post_type == "message":
         raw_msg = data.get("raw_message", "").strip()
@@ -537,7 +560,7 @@ async def handle_event(request: Request):
         return {"status": "ok"}
     
     # 拦截开发者指令
-    if await handle_developer_command(raw_msg, message_type, target_id, sender_id, data, group_id):
+    if await handle_developer_command(raw_msg, message_type, target_id, sender_id, data, group_id,msg_id):
         logging.debug("开发者指令，执行")
         return {"status": "ok"}
 
@@ -645,7 +668,7 @@ async def handle_event(request: Request):
             if this_count > 0 and this_count % 50 == 0:
                 segment = history[-50:] if len(history) >= 50 else history
                 logging.debug(f"🎯 [人设提取] 命中周期，开始分析 {context_id} 的信息...")
-                asyncio.create_task(run_info_extraction(context_id, segment))
+                # asyncio.create_task(run_info_extraction(context_id, segment))
 
             # 队列合并与跳过处理逻辑
             # 判断自己是否是等待锁的期间，最后进来的那条消息
@@ -695,14 +718,15 @@ async def handle_event(request: Request):
                         feeling=current_feeling, 
                         status_table=status_table, 
                         involved_users_info=archive_text,
-                        emoji_list=emoji_list
+                        emoji_list=emoji_list,
+                        message_type=message_type
                     )
 
                     # 4. 构造 Context：只带 1 条 System + 极简 User 历史
                     current_context = [
                         {"role": "system", "content": dynamic_system_prompt}
                     ] + history[-config.MAX_HISTORY_LIMIT:]                    
-                    logging.debug(f"提示词：{current_context}")
+                    # logging.debug(f"提示词：{current_context}")
                     # 1. 获取 AI 回复
                     result = await ask_AI(
                         messages=current_context, 
@@ -723,7 +747,7 @@ async def handle_event(request: Request):
                         DM.data["chat_contexts"][context_id].append(dic)
 
                     # 5. 发送 
-                    await process_and_send_ai_reply(reply_list, message_type, target_id, sender_id)
+                    await process_and_send_ai_reply(reply_list, message_type, target_id, sender_id, msg_id = msg_id)
 
 
                     # 统计输出层 Token 与 群计费
