@@ -104,7 +104,7 @@ class DataManager:
         
         # 2. 限制单次变动幅度 (比如单次最多加3分，最少扣10分)
         # 注意：这里必须转为 int()，否则 save_data 会报错
-        change = int(np.clip(num, -10, 3))
+        change = int(np.clip(num, -10, 5))
         
         # 3. 计算新总分，并建议对总分也做个范围限制（比如 0 到 1000）
         current_score = self.data["Favorability"][uid]

@@ -48,7 +48,7 @@ async def ask_deepseek_smart(messages, api_key):
             
             res_data = response.json()
             if "choices" not in res_data:
-                return "Miku 走神了喵...", 0
+                return "", 0
 
             raw_content = res_data['choices'][0]['message']['content']
             
@@ -213,7 +213,7 @@ async def ask_AI(messages, api_key, model_name=None):
             res_data = response.json()
             if "choices" not in res_data:
                 logging.warning(f"⚠️ 接口返回异常: {res_data}")
-                return ["Miku 走神了喵..."], 0, [], 0, "无"
+                return [""], 0, [], 0, "无"
 
             raw_content = res_data['choices'][0]['message']['content'].strip()
             

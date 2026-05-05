@@ -5,6 +5,7 @@ import logging
 import base64
 import config
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 # 这里的 API 地址可以从 main.py 传进来，或者直接写死
 
@@ -179,3 +180,17 @@ def send_emoji_reaction(message_id, emoji_id="124"):
         return response.json()
     except Exception as e:
         logging.error(f"❌ 设置表情回应失败: {e}")
+
+
+def get_current_time_simple():
+    """
+    获取当前时间，格式为：月/日/时
+    """
+    now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    # %m: 月份, %d: 日期, %H: 小时(24小时制)
+    logging.debug(now.strftime("%m-/%d /%H:/%M"))
+    return now.strftime("%m-%d %H:%M")
+
+def get_now_beijing():
+    """内部逻辑判断用的 datetime 对象"""
+    return datetime.now(ZoneInfo("Asia/Shanghai"))
