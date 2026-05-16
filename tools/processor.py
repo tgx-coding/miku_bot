@@ -3,7 +3,7 @@ import logging
 import config
 import httpx
 from tools.network import get_message_content, get_forward_msg
-from tools.qwen_ai import ask_vision
+from tools.ai import ask_vision
 from managers.data_manager import DM
 from managers.prompt_manager import PM
 import hashlib
@@ -52,7 +52,7 @@ async def explain_image(img_url: str, is_emoji: bool = False):
     try:
         # 这里动态传递 is_emoji 参数给 Prompt 管理类
         vision_prompt = PM.get_vision_prompt(is_emoji=is_emoji) 
-        ai_explanation = await ask_vision(vision_prompt, img_url, config.QWEN_API_KEY) 
+        ai_explanation = await ask_vision(vision_prompt, img_url, config.SILICONFLOW_API_KEY) 
         
         if ai_explanation and len(ai_explanation.strip()) > 2:
             res_text = ai_explanation.strip()

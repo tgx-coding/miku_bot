@@ -1,6 +1,6 @@
 import config
 from managers.data_manager import DM
-
+from tools.network import get_current_time_simple
 class PromptManager:
     """
     提示词合成管理器
@@ -42,6 +42,7 @@ class PromptManager:
             f"{setting}\n"
             f"{rules}\n"
             f"{output_rules}\n"
+            f"当前时间(月-日 时:分):{get_current_time_simple()}"
             f"--- 最近对话历史 ---\n"
             f"{history_text}\n"
             f"--- 当前新消息 ---\n"
@@ -71,14 +72,19 @@ class PromptManager:
             f"{config.SPEECH_PROMPT_SETTING}"#设定
             f"{config.SPEECH_PROMPT_RULE}"#规则
             f"{config.SPEECH_PROMPT_TOOLS}"#工具
+            )
+        if message_type == "group":
+            prompt += f"5.表情回应:[reaction:emoji_ID](用于在对方消息下贴小表情,常用)"
+        prompt +=(
+            f"当前时间(月-日 时:分):{get_current_time_simple()}"
             f"当前感受和想法:{feeling}"
             f"{status_table}" # 插入状态表
             # f"最近对话成员的档案"
             # f"{involved_users_info if involved_users_info else '暂无详细档案'}"
-            f"- 表情包列表:{str_emoji_list}"
+            f"- 表情包文件名列表(用于表情包功能):{str_emoji_list}"
         )
         if message_type == "group":
-            prompt += f"- emojiID列表:{qq_emoji_list}"
+            prompt += f"- emojiID列表(用于表情回复功能):{qq_emoji_list}"
         return prompt
 
     @staticmethod

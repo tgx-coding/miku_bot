@@ -19,7 +19,7 @@ import Global
 from managers.data_manager import DM
 from managers.prompt_manager import PM
 from tools.ai import ask_deepseek_smart, get_balance, ask_AI, get_silicon_balance, ask_silicon_smart
-from tools.network import send_msg, approve_friend_request,get_bj_time,send_emoji_reaction
+from tools.network import send_msg, approve_friend_request,get_bj_time,send_emoji_reaction,get_current_time_simple,get_now_beijing
 from tools.processor import explain_message
 
 # --- 初始化存档 ---
@@ -44,76 +44,131 @@ def log_info_throttled(key, interval_sec, message):
 # 后台任务与生命周期
 # ==========================================
 
-async def idle_warm_up_worker():
-    """后台暖场任务"""
-    # logging.info("🚀 暖场守护进程已启动...")
+async def token_reset_worker():
+    """负责每天定时重置群 Token 使用额度"""
+    logging.info("📅 额度重置守护进程已启动...")
     while True:
-        now = datetime.now()
-        current_hour = now.hour
+        now = get_now_beijing()
         today_str = now.strftime("%Y-%m-%d")
-
         last_refresh = DM.data.get("last_token_refresh_date", "")
-        
-        if current_hour >= config.REFRESH_HOUR and last_refresh != today_str:
-            logging.info(f"📅 监测到已过 {config.REFRESH_HOUR}:00，正在重置各群 Token 额度...")
-            DM.data["group_token_usage"] = {}
-            DM.data["last_token_refresh_date"] = today_str
-            DM.save_data()
 
-        if config.SLEEP_START <= current_hour < config.SLEEP_END:
-            await asyncio.sleep(600) 
-            continue
+        # 检查是否到达重置小时且今天还没重置过
+        if now.hour >= config.REFRESH_HOUR and last_refresh != today_str:
+            logging.info(f"⏰ 北京时间 {now.hour}:00，触发每日额度重置...")
+            try:
+                DM.data["group_token_usage"] = {}
+                DM.data["last_token_refresh_date"] = today_str
+                DM.save_data()
+                logging.info("✅ 各群 Token 消耗额度已归零")
+            except Exception as e:
+                logging.error(f"❌ 额度重置失败: {e}")
 
-        current_time = time.time()
-        for group_id, last_time in list(DM.data["last_msg_time"].items()):
-            if current_time - last_time > config.IDLE_THRESHOLD:
-                if random.random() < 0.3 and config.WARM_MODE: 
-                    # logging.info(f"检测到群 {group_id} 冷场，准备暖场...")
-                    idle_prompt = config.WARM_PROMPT
+        # 每 10 分钟检查一次，不需要太频繁
+        await asyncio.sleep(600)
+
+# # --- 任务 2：冷场暖场自动任务 ---
+# async def idle_warm_up_worker():
+#     """负责在群内冷场时自动发言"""
+#     logging.info("🚀 自动暖场守护进程已启动...")
+#     while True:
+#         now = get_now_beijing()
+#         current_hour = now.hour
+
+#         # 1. 睡觉时间判断（静默期）
+#         if config.SLEEP_START <= current_hour < config.SLEEP_END:
+#             # logging.debug(f"当前时间 {current_hour} 点，处于猫葱睡觉时间，跳过暖场检查")
+#             await asyncio.sleep(600) 
+#             continue
+
+#         # 2. 检查各个群的活跃度
+#         current_time = time.time()
+#         # 使用 list 包装字典键值防止在遍历时因为字典大小改变报错
+#         msg_times = list(DM.data.get("last_msg_time", {}).items())
+
+#         for group_id, last_time in msg_times:
+#             # 计算距离上次发言的时间
+#             idle_duration = current_time - last_time
+            
+#             if idle_duration > config.IDLE_THRESHOLD:
+#                 # 判定通过：概率触发 + 全局暖场开关
+#                 if random.random() < 0.3 and config.WAR_MODE: 
+#                     logging.info(f"🔍 检测到群 {group_id} 冷场({int(idle_duration)}s)，猫葱准备暖场...")
                     
-                    try:
-                        result = await ask_deepseek_smart(messages=idle_prompt, api_key=config.DEEP_SEEK_API_KEY)
-                        if isinstance(result, (list, tuple)) and len(result) >= 3:
-                            reply_list, _, _ = result
-                            for text in reply_list:
-                                if text:
-                                    send_msg("group", group_id, None, text)
-                                    await asyncio.sleep(len(text) * 0.4 + 0.5)
-                        DM.data["last_msg_time"][str(group_id)] = time.time()
-                    except Exception as e:
-                        logging.error(f"❌ 暖场调用失败: {e}")
-                else:
-                    DM.data["last_msg_time"][str(group_id)] = current_time - (config.IDLE_THRESHOLD - 300)
-                    log_info_throttled(
-                        key=f"idle_skip_{group_id}",
-                        interval_sec=3600,
-                        message=f"群 {group_id} 冷场中,判定未通过，跳过。",
-                    )
+#                     try:
+#                         # 获取当前北京时间字符串作为 Prompt 参考（可选）
+#                         current_time_str = get_current_time_simple()
+                        
+#                         # 调用 AI 获取暖场话语
+#                         result = await ask_deepseek_smart(
+#                             messages=config.WARM_PROMPT, 
+#                             api_key=config.DEEP_SEEK_API_KEY
+#                         )
+                        
+#                         if isinstance(result, (list, tuple)) and len(result) >= 3:
+#                             reply_list, _, _ = result
+#                             for text in reply_list:
+#                                 if text:
+#                                     send_msg("group", group_id, None, text)
+#                                     # 模拟打字延迟
+#                                     await asyncio.sleep(len(text) * 0.4 + 0.5)
+                        
+#                         # 发言完成后更新最后活跃时间，防止连续复读
+#                         DM.data["last_msg_time"][str(group_id)] = time.time()
+                        
+#                     except Exception as e:
+#                         logging.error(f"❌ 暖场 API 调用失败: {e}")
+#                 else:
+#                     # 判定未通过（可能是概率没中），稍微往后推延一点检查时间，避免每轮都判定
+#                     DM.data["last_msg_time"][str(group_id)] = current_time - (config.IDLE_THRESHOLD - 300)
+                    
+#                     log_info_throttled(
+#                         key=f"idle_skip_{group_id}",
+#                         interval_sec=3600,
+#                         message=f"群 {group_id} 冷场中，概率判定跳过，1小时内不再重复记录。",
+#                     )
 
-        await asyncio.sleep(config.CHECK_INTERVAL)
+#         # 按照配置的间隔进行下一轮扫群
+#         await asyncio.sleep(config.CHECK_INTERVAL)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logging.info("猫葱正在苏醒...")
 
+    # 1. 启动时的 Token 消耗审计
     token_usage = DM.data.get("group_token_usage", {})
     if token_usage:
         logging.info(f"📊 已载入 {len(token_usage)} 个群聊的 Token 消耗记录")
         for gid, usage in token_usage.items():
-            logging.info(f"   - 群 {gid}: 已消耗 {usage} tokens")
+            # 计算剩余百分比 (可选，方便一眼看出额度)
+            remaining = max(0, config.GROUP_TOKEN_LIMIT - usage)
+            logging.info(f"   - 群 {gid}: 已消耗 {usage} | 剩余 {remaining} tokens")
     else:
         logging.info("📊 当前无群聊 Token 消耗记录")
 
+    # 2. 初始化全局变量
     if not hasattr(Global, 'chat_locks'): Global.chat_locks = {}
     if not hasattr(Global, 'last_handle_time'): Global.last_handle_time = {}
-    bg_task = asyncio.create_task(idle_warm_up_worker())
+
+    # 3. 启动所有后台守护任务
+    logging.info("🚀 正在启动后台守护进程 (重置任务 & 暖场任务)...")
+    reset_task = asyncio.create_task(token_reset_worker())
+    # warmup_task = asyncio.create_task(idle_warm_up_worker())
+
     yield  
+    
+    # 4. 关闭时的清理逻辑
     logging.info("💤 Miku 准备睡觉了，正在清理任务...")
-    bg_task.cancel() 
+    reset_task.cancel()
+    # warmup_task.cancel()
+    
     try:
-        await bg_task
-    except asyncio.CancelledError:
-        logging.info("✅ 后台任务已安全停止")
+        # 等待任务确认取消
+        await asyncio.gather(reset_task,
+                            #   warmup_task, 
+                              return_exceptions=True)
+        logging.info("✅ 所有后台任务已安全停止")
+    except Exception as e:
+        logging.error(f"❌ 清理任务时发生异常: {e}")
 
 app = FastAPI(lifespan=lifespan)
 
@@ -180,6 +235,7 @@ def is_owner(event: dict) -> bool:
 async def handle_developer_command(raw_msg, message_type, target_id, sender_id, event, group_id,message_id):
     """处理开发者及管理员特殊指令，返回 True 代表拦截，False 代表继续走 AI 对话"""
     global emoji_list
+    import re # 引入正则库用于参数提取
     
     # 没被提到则不走指令检查
     if f"[CQ:at,qq={config.MY_BOT_QQ}]" not in raw_msg:
@@ -210,9 +266,74 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
                         logging.error(f"刷新表情包失败\n{e}")
                     return True
                 
-                # if "emoji_reply_message_test" in raw_msg:
-                #     send_emoji_reaction(message_id= message_id,emoji_id="66")
-                #     # return True
+                # --- 新增：好感度修改指令 ---
+                # 匹配格式: 好感+50, 好感-10, 好感=100
+                favor_match = re.search(r'好感(?:度)?\s*([+\-=])\s*(\d+)', raw_msg)
+                if favor_match:
+                    op = favor_match.group(1)
+                    val = int(favor_match.group(2))
+                    
+                    bot_qq = str(config.MY_BOT_QQ)
+                    target_qqs = set()
+                    
+                    # 1. 优先提取 CQ码 里的 at（支持一次性艾特多个人）
+                    for at_qq in re.findall(r'\[CQ:at,qq=(\d+)\]', raw_msg):
+                        if at_qq != bot_qq:
+                            target_qqs.add(at_qq)
+                    
+                    # 2. 如果没 @ 人，尝试从文本提取纯数字QQ (5-11位)
+                    if not target_qqs:
+                        for num_qq in re.findall(r'(?<!\d)([1-9]\d{4,10})(?!\d)', raw_msg):
+                            if num_qq != bot_qq and num_qq != str(val): # 防止把加减的数值当成QQ
+                                target_qqs.add(num_qq)
+                    
+                    if target_qqs:
+                        res_msgs = []
+                        for uid in target_qqs:
+                            current = DM.data.get("Favorability", {}).get(uid, 10)
+                            if op == '+':
+                                new_val = current + val
+                            elif op == '-':
+                                new_val = current - val
+                            else: # '='
+                                new_val = val
+                            
+                            # 直接操作底层数据以绕过单次修改限制
+                            if "Favorability" not in DM.data:
+                                DM.data["Favorability"] = {}
+                            DM.data["Favorability"][uid] = new_val
+                            res_msgs.append(f"{uid}: {current} -> {new_val}")
+                        
+                        DM.save_data()
+                        send_msg(message_type, target_id, sender_id, "好感度修改完毕：\n" + "\n".join(res_msgs))
+                        logging.info(f"开发者修改了好感度: {target_qqs} {op}{val}")
+                    else:
+                        send_msg(message_type, target_id, sender_id, "⚠️ 请 @ 你要修改好感度的目标，或者填写明确的QQ号喵")
+                    return True
+                
+                # --- 新增：群额度增加指令 ---
+                # 匹配格式: 加额度1000, 增加群额度 5000, 群额度+200
+                quota_match = re.search(r'(?:群额度|额度)(?:增加|\+|加)\s*(\d+)|(?:增加|加)(?:群额度|额度)\s*(\d+)', raw_msg)
+                if quota_match:
+                    add_val_str = quota_match.group(1) or quota_match.group(2)
+                    if add_val_str:
+                        add_val = int(add_val_str)
+                        if group_id:
+                            gid_str = str(group_id)
+                            current_usage = DM.data.get("group_token_usage", {}).get(gid_str, 0)
+                            
+                            # 增加额度 = 减少今日使用量
+                            new_usage = max(0, current_usage - add_val)
+                            if "group_token_usage" not in DM.data:
+                                DM.data["group_token_usage"] = {}
+                            DM.data["group_token_usage"][gid_str] = new_usage
+                            DM.save_data()
+                            
+                            send_msg(message_type, target_id, sender_id, f"已为当前群增加临时额度 {add_val}\n今日Token消耗数据已回退至: {new_usage}")
+                            logging.info(f"开发者为群 {gid_str} 增加了额度 {add_val}")
+                        else:
+                            send_msg(message_type, target_id, sender_id, "此指令需要在群聊中使用喵")
+                        return True
 
                 if any(k in raw_msg for k in ["清空token数据", "清空token", "重制token数据","重制token"]):
                     try:
@@ -263,7 +384,7 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
                         except Exception as e:
                             send_msg(message_type, target_id, sender_id, "猫找不到喵......")
                             logging.error("查询silicon token失败")
-
+                
 
             if any(k in raw_msg for k in ["token", "tk", "余额"]):
                 if any(k in raw_msg for k in ["gp", "group"]):
@@ -306,10 +427,6 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
                 if group_id  in ban_gp:
                     ban_gp.remove(group_id)  
                 return True  
-            
-                
-
-
 
     except Exception as e:
         import traceback
@@ -317,7 +434,6 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
         return True 
 
     return False
-
 async def process_and_send_ai_reply(reply_list, message_type, target_id, sender_id, msg_id=None):
     """处理并拆分AI输出文本与图片，安全发送，并支持动作、结婚、表情回应"""
     for original_text in reply_list:
@@ -543,6 +659,11 @@ async def handle_event(request: Request):
             logging.debug('其他提示信息，跳过')
             return {"status": "ignore"}
         
+    # 拦截开发者指令
+    if await handle_developer_command(raw_msg, message_type, target_id, sender_id, data, group_id,msg_id):
+        logging.debug("开发者指令，执行")
+        return {"status": "ok"}
+        
     # 调试模式指定群聊
     if config.DEBUG_MODE:
         if group_id != config.DEBUG_GP and message_type == "group":
@@ -559,10 +680,6 @@ async def handle_event(request: Request):
         logging.debug("群聊被ban，跳过")
         return {"status": "ok"}
     
-    # 拦截开发者指令
-    if await handle_developer_command(raw_msg, message_type, target_id, sender_id, data, group_id,msg_id):
-        logging.debug("开发者指令，执行")
-        return {"status": "ok"}
 
 
     

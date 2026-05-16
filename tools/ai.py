@@ -4,7 +4,12 @@ import logging
 import config
 import Global
 import re
+import os
 from managers.data_manager import DM
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("AI")
+TEXT_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+VISION_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 
 
 async def get_balance(api_key):
@@ -48,7 +53,7 @@ async def ask_deepseek_smart(messages, api_key):
             
             res_data = response.json()
             if "choices" not in res_data:
-                return "Miku 走神了喵...", 0
+                return "", 0
 
             raw_content = res_data['choices'][0]['message']['content']
             
@@ -213,7 +218,7 @@ async def ask_AI(messages, api_key, model_name=None):
             res_data = response.json()
             if "choices" not in res_data:
                 logging.warning(f"⚠️ 接口返回异常: {res_data}")
-                return ["Miku 走神了喵..."], 0, [], 0, "无"
+                return [""], 0, [], 0, "无"
 
             raw_content = res_data['choices'][0]['message']['content'].strip()
             
@@ -338,3 +343,74 @@ async def ask_silicon_smart(messages, api_key, model_name="Qwen/Qwen2.5-7B-Instr
         import traceback
         traceback.print_exc()
         return None # 返回 None 让 main.py 进入错误处理
+    
+async def ask_vision(prompt: str, img_url: str, api_key: str, model: str = "Qwen/Qwen3.5-27B"):
+    """
+    2. 视觉识图调用 
+    :param prompt: 对图片的指令 (例如: '描述一下这张图')
+    :param img_url: 图片的公网直链 (NapCat 提供的 URL)
+    :param model: 硅基流动的视觉模型名称
+    """
+    VISION_URL = "https://api.siliconflow.cn/v1/chat/completions"
+
+    # 1. 检查是否是局域网本地图片
+    if "127.0.0.1" in img_url or "localhost" in img_url:
+        logger.error(f"❌ 识图失败：NapCat 返回的是本地局域网地址({img_url})，大模型在云端是请求不到你本地电脑的喵！")
+        return "本地图片我没办法直接看哦，请在 NapCat 中开启公网直链或图片上传功能喵！"
+
+    # 2. 用最传统的方式，在发起请求的瞬间强行让当前线程屏蔽代理环境变量
+    # 这样既不会引发 AsyncClient 的参数崩溃，又能安全直连
+    old_http = os.environ.get("HTTP_PROXY")
+    old_https = os.environ.get("HTTPS_PROXY")
+    if "HTTP_PROXY" in os.environ: del os.environ["HTTP_PROXY"]
+    if "HTTPS_PROXY" in os.environ: del os.environ["HTTPS_PROXY"]
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": img_url}}
+                ]
+            }
+        ],
+        "stream": False
+    }
+
+    import httpx
+    # 彻底返璞归真，不传任何引发争议的初始化参数
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        try:
+            resp = await client.post(VISION_URL, headers=headers, json=payload)
+            
+            # 恢复原本的环境变量，不影响你 Bot 其他海外 API 的代理
+            if old_http: os.environ["HTTP_PROXY"] = old_http
+            if old_https: os.environ["HTTPS_PROXY"] = old_https
+
+            # 开始审计结果
+            if resp.status_code != 200:
+                logger.error(f"❌ 硅基流动服务器拒绝了请求！状态码: {resp.status_code} | 详细回包: {resp.text}")
+                return f"呜...由于【{resp.status_code}】原因，人家的眼睛突然看不清了喵。"
+
+            res_json = resp.json()
+            if "choices" in res_json and len(res_json["choices"]) > 0:
+                return res_json["choices"][0]["message"]["content"]
+            else:
+                logger.error(f"❌ 接口解析格式不匹配。完整回包: {res_json}")
+                return "呜...人家的眼睛好像进沙子了喵。"
+
+        except Exception as e:
+            # 恢复环境变量
+            if old_http: os.environ["HTTP_PROXY"] = old_http
+            if old_https: os.environ["HTTPS_PROXY"] = old_https
+            
+            # 用 repr(e) 强行把真实的错误塞进一行日志，绝对不会再被截断
+            logger.error(f"❌ 识图请求遭遇底层异常: {repr(e)}")
+            return "网络坏掉了，看不见大葱在哪里喵！"
