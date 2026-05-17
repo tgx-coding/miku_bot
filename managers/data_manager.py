@@ -5,7 +5,9 @@ import config
 import numpy as np
 import time
 import shutil  
+from tools.network import get_group_member_name_dict
 from datetime import datetime
+
 
 class DataManager:
     def __init__(self):
@@ -379,5 +381,50 @@ class DataManager:
     def is_married(self, qq: str):
         """查询是否已婚"""
         return str(qq) in self.data.get("marry_list", [])
+    
+    async def get_group_favorability_ranking(self, group_id: int, reverse: bool = True) -> list:
+        """
+        获取群聊全部成员的好感度排名列表
+        :param group_id: 群号
+        :param reverse: 排序方式，True 为从高到低（降序），False 为从低到高（升序）
+        :return: 包含用户信息的字典列表，例：[{"user_name": "xxx", "favor": "xxx"}]
+        """
+        # 1. 调用你修改好的函数，获取 {"QQ号(str)": "名字(str)"} 字典
+        member_dict = await get_group_member_name_dict(group_id)
+        
+        if not member_dict:
+            logging.warning(f"⚠️ 未能获取到群 {group_id} 的成员名单，无法生成好感度排名。")
+            return []
+
+        temp_list = []
+
+        # 2. 遍历群成员，获取对应的好感度数据
+        for uid_str, name in member_dict.items():
+            # 使用你提供的 get_favor 拿到好感度（DM 内部返回的是 int）
+            favor_int = DM.get_favor(uid_str)
+            
+            # 先存入临时列表，保留 int 用于精准排序
+            temp_list.append({
+                "user_name": name,
+                "favor_int": favor_int,
+                "favor_str": str(favor_int) # 提前转好字符串供后续输出
+            })
+
+        # 3. 根据整数值进行排序
+        # reverse=True 为从高到低，reverse=False 为从低到高
+        temp_list.sort(key=lambda x: x["favor_int"], reverse=reverse)
+
+        # 4. 构建最终符合你要求的标准输出格式
+        final_ranking = [
+            {
+                "user_name": item["user_name"],
+                "favor": item["favor_str"]
+            }
+            for item in temp_list
+        ]
+
+        logging.info(f"🏆 成功生成群 {group_id} 的好感度排名表，共计 {len(final_ranking)} 人")
+        return final_ranking
+
 
 DM = DataManager()

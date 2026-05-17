@@ -427,6 +427,60 @@ async def handle_developer_command(raw_msg, message_type, target_id, sender_id, 
                 if group_id  in ban_gp:
                     ban_gp.remove(group_id)  
                 return True  
+            
+            # 1. 优先匹配带数字的精准指令（把“排行/排名”设为可选，通杀：好感前5、好感排名前5、好感度后10）
+            num_match = re.search(r"好感(?:度)?(?:排行|排名)?(前|后)(\d{1,3})", raw_msg.strip())
+            
+            # 2. 如果没带数字，再匹配纯粹的全员排行（如：好感排行、好感度排名）
+            all_match = re.search(r"好感(?:度)?(排行|排名)", raw_msg.strip())
+
+            if num_match or all_match:
+                if group_id:
+                    if num_match:
+                        # 触发了带数字的切片
+                        type_flag = num_match.group(1)   # "前" 或 "后"
+                        limit_str = num_match.group(2)   # 数字字符串
+                        is_all_ranking = False
+                    else:
+                        # 触发了纯全员排行
+                        type_flag = "前"
+                        limit_str = None
+                        is_all_ranking = True
+                            
+                    # 确定排序方向
+                    is_reverse = True
+                    if type_flag == "后":
+                        is_reverse = False
+                        
+                    # 从数据管理器获取全量排序列表（使用全关键字传参，稳妥防报错）
+                    ranking = await DM.get_group_favorability_ranking(group_id=group_id, reverse=is_reverse)
+                    
+                    if ranking:
+                        # 计算切片范围
+                        if is_all_ranking:
+                            display_list = ranking
+                            title_text = "✨当前群好感度全员排行榜✨"
+                        else:
+                            limit_num = int(limit_str)
+                            # 防御性：取输入值和群总人数的最小值，防止越界
+                            actual_limit = min(limit_num, len(ranking))
+                            display_list = ranking[:actual_limit]
+                            title_text = f"✨当前群好感度{type_flag}{actual_limit}名✨"
+                            
+                        # 开始组装文本
+                        reply_lines = [f"📊 {title_text}"]
+                        
+                        for index, user in enumerate(display_list, start=1):
+                            # 如果是查询后几名，显示“倒数第X名”
+                            rank_str = f"第 {index}名" if type_flag != "后" else f"倒数第 {index}名"
+                            reply_lines.append(f"{rank_str} | {user['user_name']} ({user['favor']} 点)")
+                            
+                        send_msg(message_type, target_id, sender_id, "\n".join(reply_lines))
+                    else:
+                        send_msg(message_type, target_id, sender_id, "⚠️ 排行榜空空如也喵~")
+                        
+                return True
+            
 
     except Exception as e:
         import traceback

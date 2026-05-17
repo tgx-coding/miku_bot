@@ -194,3 +194,59 @@ def get_current_time_simple():
 def get_now_beijing():
     """内部逻辑判断用的 datetime 对象"""
     return datetime.now(ZoneInfo("Asia/Shanghai"))
+
+async def get_group_member_name_dict(group_id: int) -> dict:
+    """
+    获取当前群聊全部成员的 {QQ号: 名字} 字典
+    名字逻辑：优先使用群名片(card)，如果没有设置则使用QQ昵称(nickname)
+    """
+    # 根据你的 NapCat 实际端口修改（通常在一台电脑上是 3000）
+    url = "http://127.0.0.1:3000/get_group_member_list"
+    payload = {
+        "group_id": group_id,
+        "no_cache": True  # 强制刷新缓存，确保获取到最新的群名片
+    }
+    
+    result_dict = {}
+
+    # 1. 安全屏蔽当前请求的代理，防止本地连接抽风或引发旧版本 httpx 参数崩溃
+    old_http = os.environ.get("HTTP_PROXY")
+    old_https = os.environ.get("HTTPS_PROXY")
+    if "HTTP_PROXY" in os.environ: del os.environ["HTTP_PROXY"]
+    if "HTTPS_PROXY" in os.environ: del os.environ["HTTPS_PROXY"]
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, json=payload)
+            
+            # 2. 及时恢复环境变量，不影响大模型 API 的海外代理
+            if old_http: os.environ["HTTP_PROXY"] = old_http
+            if old_https: os.environ["HTTPS_PROXY"] = old_https
+
+            if resp.status_code == 200:
+                res_json = resp.json()
+                if res_json.get("status") == "ok":
+                    member_list = res_json.get("data", [])
+                    
+                    for member in member_list:
+                        # 转换 QQ 号为 int 类型（符合你的字典键示例）
+                        qq_number = str(member["user_id"])
+                        
+                        # 核心命名逻辑：若群名片 card 为空或不存在，则回退使用 nickname
+                        show_name = member.get("card") or member.get("nickname") or "无名群员"
+                        
+                        result_dict[qq_number] = show_name
+                        
+                    logging.info(f"📊 成功构建群 {group_id} 名册字典，共 {len(result_dict)} 个成员")
+                else:
+                    logging.error(f"❌ NapCat 返回状态异常: {res_json}")
+            else:
+                logging.error(f"❌ 获取群成员列表 HTTP 失败，状态码: {resp.status_code}")
+
+    except Exception as e:
+        # 确保发生异常时也能恢复代理环境变量
+        if old_http: os.environ["HTTP_PROXY"] = old_http
+        if old_https: os.environ["HTTPS_PROXY"] = old_https
+        logging.error(f"❌ 构建群成员字典时遭遇严重系统异常: {repr(e)}")
+
+    return result_dict
