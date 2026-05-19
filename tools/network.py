@@ -77,15 +77,38 @@ def send_msg(msg_type, group_id, user_id, text):
             "message": text
         }
 
-    # 4. 执行发送
+    # 4. 去除 URL 中可能存在的双斜杠
+    target_url = re.sub(r'(?<!:)/+', '/', target_url)
+
+    # 5. 执行发送
     try:
         response = requests.post(target_url, json=payload, timeout=10)
+        # 记录日志时隐藏 base64 内容，节省空间
+        log_text = re.sub(r'base64://[^,\]]+', 'base64://<图片数据已省略>', text)
+
         if response.status_code == 200:
-            # 记录日志时隐藏 base64 内容，节省空间
-            log_text = re.sub(r'base64://[^,\]]+', 'base64://<图片数据已省略>', text)
-            logging.debug(f"🚀 消息发送成功: {log_text}")
+            # NapCat API 即使 HTTP 200 也可能投递失败，必须检查响应体
+            try:
+                resp_json = response.json()
+            except Exception:
+                resp_json = {}
+
+            napcat_status = resp_json.get("status", "ok")
+            napcat_retcode = resp_json.get("retcode", 0)
+            napcat_msg = resp_json.get("message", "")
+            napcat_wording = resp_json.get("wording", "")
+
+            if napcat_status == "failed" or napcat_retcode != 0:
+                logging.warning(
+                    f"⚠️ NapCat 投递失败 | HTTP 200 但业务层错误 | "
+                    f"status={napcat_status}, retcode={napcat_retcode}, "
+                    f"message={napcat_msg}, wording={napcat_wording} | "
+                    f"发送内容: {log_text}"
+                )
+            else:
+                logging.debug(f"🚀 消息发送成功: {log_text}")
         else:
-            logging.warning(f"⚠️ 发送失败，状态码: {response.status_code} | 响应: {response.text},发送内容：{log_text}")
+            logging.warning(f"⚠️ 发送失败，状态码: {response.status_code} | 响应: {response.text} | 发送内容: {log_text}")
     except Exception as e:
         logging.error(f"❌ 网络异常: {e}")
 
